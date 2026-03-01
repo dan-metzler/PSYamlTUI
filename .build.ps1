@@ -10,12 +10,6 @@ task CheckGitStatus {
     Test-GitStatus -ExpectedBranch 'main' 
 }
 
-task ModuleOutFolderCleanup {
-    if (Test-Path "$PSScriptRoot\Output") {
-        Remove-Item "$PSScriptRoot\Output\*" -Recurse -Force
-    }
-}
-
 task BuildModule {
     $ok = & "$PSScriptRoot\Source\ModuleBuilder.ps1"
     if (-Not($ok)) { throw "ModuleBuilder.ps1 failed" }
@@ -30,4 +24,4 @@ task RunTests {
 ### RUN BUILD TASKS
 #######################################
 
-task . CheckGitStatus, ModuleOutFolderCleanup, BuildModule, RunTests
+task . CheckGitStatus, BuildModule, RunTests
