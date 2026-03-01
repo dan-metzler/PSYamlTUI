@@ -1,5 +1,10 @@
 {
     "github.copilot.chat.commitMessageGeneration.instructions": [
-    { "file": "./GitHub/global-git-commit-instructions.md" }
-    ]
+        { "file": "./GitHub/global-git-commit-instructions.md" }
+    ],
+
+    "[powershell]": {
+        "editor.defaultFormatter": "ms-vscode.powershell",
+        "editor.formatOnSave": true
+    }
 }
