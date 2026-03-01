@@ -6,7 +6,7 @@ Why use this repo
 - Small, focused scaffold for new PowerShell modules.
 - Includes build automation with [Invoke-Build](https://github.com/nightroman/Invoke-Build).
 - Includes module packaging helper via [ModuleBuilder](https://github.com/PoshCode/ModuleBuilder).
-- Simple test integration and convenience scripts to get started fast.
+- Simple file and folder structure to replace with your own logic.
 
 Repository layout
 - `Install-Requirements.ps1` — optional helper to install dependencies.
