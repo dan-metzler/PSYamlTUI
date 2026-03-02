@@ -1,10 +1,16 @@
 Describe "Get-CatFact" {
     BeforeAll {
-        # Import the module to bring Get-CatFact into scope
-        Import-Module "$PSScriptRoot\..\Output\NewModule\NewModule.psd1" -Force
+    # Import the module to bring Get-CatFact2 into scope
+    $getPsdFile = Get-ChildItem -Path "$PSScriptRoot\..\Output\*.psd1" -Recurse | Select-Object -First 1
+    
+    if (-not($getPsdFile)) {
+        throw "No .psd1 file found in the Output directory."
+    }
+
+    $ModuleDetails = $getPsdFile | Import-Module -PassThru -Force -ErrorAction Stop
         
         # Mock must target the module scope in Pester 5
-        Mock Invoke-RestMethod { @{ fact = "Cats sleep a lot" } } -ModuleName NewModule
+        Mock Invoke-RestMethod { @{ fact = "Cats sleep a lot" } } -ModuleName $ModuleDetails.Name
     }
 
     It "Returns the fact from JSON response" {
