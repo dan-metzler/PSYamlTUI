@@ -3,8 +3,8 @@
     Builds and packages the PowerShell module using the ModuleBuilder framework.
 
 .DESCRIPTION
-    This script is responsible for orchestrating the module build process. It locates the manifest (.psd1) file
-    from the Output directory, validates module metadata, and invokes the Build-Module cmdlet to compile,
+    This script is responsible for orchestrating the module build process. It locates the source manifest (.psd1)
+    file from the Source directory, validates module metadata, and invokes the Build-Module cmdlet to compile,
     package, and version the module artifact.
 
 .PARAMETER Version
@@ -31,14 +31,14 @@ param(
 # ============================================================================
 # Step 1: Locate Module Manifest
 # ============================================================================
-# Discovers the module manifest file (.psd1) within the Output directory tree.
+# Discovers the module manifest file (.psd1) in the Source directory.
 # This file defines module metadata, exports, dependencies, and other attributes.
 # We use -First 1 to ensure only a single manifest is processed.
 
-$psdFile = Get-ChildItem -Path "$PSScriptRoot\Output\*.psd1" -Recurse | Select-Object -First 1
+$psdFile = Get-ChildItem -Path "$PSScriptRoot\*.psd1" | Select-Object -First 1
 
 if (-not($psdFile)) {
-    throw "No .psd1 file found in the Output directory."
+    throw "No .psd1 file found in the Source directory."
 }
 
 # ============================================================================
