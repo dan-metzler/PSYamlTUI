@@ -25,8 +25,12 @@ Import-Module InvokeBuild
 . "$PSScriptRoot\Build\BuildFunctions.ps1"
 
 # ============================================================================
-# Module Manifest Discovery & Validation
+# Script-Scoped Variables
 # ============================================================================
+# Shared across all tasks to avoid redundant module discovery and imports.
+# Populated by the ModuleImport task and consumed by downstream tasks.
+
+$script:ModuleDetails = $null
 
 # ============================================================================
 # Define Build Tasks
@@ -40,20 +44,39 @@ task BuildModule {
     if (-Not($ok)) { throw "ModuleBuilder.ps1 failed" }
 }
 
+# ============================================================================
+# Task: ModuleImport
+# ============================================================================
+# Validates and imports the compiled module into the current session.
+# Populates the script-scoped $script:ModuleDetails variable for use by
+# downstream tasks (e.g., GenerateMarkdownDocs, RunTests).
+#
+# Validations performed:
+#   - Module manifest (.psd1) exists in the Output directory
+#   - Module name is defined and non-empty in the manifest
+
 task ModuleImport {
     $getPsdFile = Get-ChildItem -Path "$PSScriptRoot\Output\*.psd1" -Recurse | Select-Object -First 1
+    
     if (-not($getPsdFile)) {
         throw "No .psd1 file found in the Output directory."
     }
 
-    $moduleDetails = $getPsdFile | Import-Module -PassThru -Force
+    $script:ModuleDetails = $getPsdFile | Import-Module -PassThru -Force
 
-    if ([string]::IsNullOrEmpty($moduleDetails.Name)) {
+    if ([string]::IsNullOrEmpty($script:ModuleDetails.Name)) {
         throw "Module name is missing in the .psd1 file. Confirm .psd1 file configuration."
     }
 }
 
-task GenerateMarkdownDocs {
+# ============================================================================
+# Task: GenerateMarkdownDocs
+# ============================================================================
+# Generates markdown documentation for all exported module functions using platyPS.
+# Depends on ModuleImport to ensure $script:ModuleDetails is populated.
+# Creates function reference documentation in the Docs directory.
+
+task GenerateMarkdownDocs ModuleImport, {
     Write-Verbose "Generating Function Markdown Documentation..." -Verbose
 
     $docsPath = "$PSScriptRoot\Docs"
@@ -61,7 +84,7 @@ task GenerateMarkdownDocs {
         throw "Could not find the Docs directory at $docsPath. Confirm the directory exists and try again."
     }
 
-    if (New-MarkdownHelp -Module $moduleDetails.Name -OutputFolder $docsPath -Force) {
+    if (New-MarkdownHelp -Module $script:ModuleDetails.Name -OutputFolder $docsPath -Force) {
         Write-Verbose "Done." -Verbose
     }
     else {
@@ -69,12 +92,29 @@ task GenerateMarkdownDocs {
     }
 }
 
+# ============================================================================
+# Task: RunTests
+# ============================================================================
+# Executes all Pester test suites against the compiled module.
+# Discovers and runs all .Tests.ps1 files in the Tests directory.
+# Validates module functionality, command exports, and parameter sets.
+
 task RunTests {
     Invoke-Pester -Script "$PSScriptRoot\Tests"
 }
 
 
 # ============================================================================
-# Execute Build Pipeline
+# Default Build Pipeline
 # ============================================================================
+# Defines the complete build orchestration sequence.
+# Tasks execute in order; failure at any stage halts the pipeline.
+#
+# Execution sequence:
+#   1. CheckGitStatus        - Ensure build branch is 'main'
+#   2. BuildModule           - Compile and package the module
+#   3. ModuleImport          - Validate and import module artifact
+#   4. GenerateMarkdownDocs  - Create function documentation (depends on ModuleImport)
+#   5. RunTests              - Verify module functionality via Pester
+
 task . CheckGitStatus, BuildModule, ModuleImport, GenerateMarkdownDocs, RunTests
