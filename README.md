@@ -1,75 +1,102 @@
-# PSNewModule — PowerShell module scaffold
+# PSNewModule
 
-A forkable starter repository for quickly scaffolding a new PowerShell module. Use this repo as a template when you have a new module idea — it wires up common build, test and packaging tasks using Invoke-Build and ModuleBuilder.
+Minimal PowerShell module template with build, test, and docs automation.
 
-Why use this repo
-- Small, focused scaffold for new PowerShell modules.
-- Includes build automation with [Invoke-Build](https://github.com/nightroman/Invoke-Build).
-- Includes module packaging helper via [ModuleBuilder](https://github.com/PoshCode/ModuleBuilder).
-- Simple file and folder structure to replace with your own logic.
+## What this repo includes
 
-Repository layout
-- `Install-Requirements.ps1` — optional helper to install dependencies.
-- `.build.ps1` — Invoke-Build task definitions.
-- `Build/BuildFunctions.ps1` — helper functions used by the build (e.g. `Test-GitStatus`).
-- `Source/` — module source and builder script (`ModuleBuilder.ps1`, `NewModule.psd1`, `NewModule.psm1`).
-- `Output/` — build output (package artifacts).
-- `Tests/` — Pester tests.
+- `Invoke-Build` pipeline (`.build.ps1`)
+- Module packaging with `ModuleBuilder` (`Source/ModuleBuilder.ps1`)
+- Pester tests (`Tests/`)
+- Markdown help generation with `platyPS` (`Docs/`)
 
-Prerequisites
-- PowerShell 7+ (or PowerShell 5.1 where compatible).
-- Git on PATH.
-- Optional: run `Install-Requirements.ps1` to install `Invoke-Build` and `Pester` if not present.
+## Prerequisites
 
-Quick start
-1. Fork this repository and clone your fork locally.
+- PowerShell 5.1+ (PowerShell 7 recommended)
+- Git
+- PowerShellGet access to install modules
 
-2. From the repo root, (optionally) bootstrap requirements:
+## Install dependencies
+
+From repo root:
 
 ```powershell
 .\Install-Requirements.ps1
 ```
 
-3. Run the build tasks.
+This installs required modules using min/max version ranges:
 
-Run all default tasks (CheckGit → folderCleanup → BuildModule → Test):
+- `ModuleBuilder` (3.1.8 - 4.x)
+- `Pester` (3.4.0 - 5.x)
+- `InvokeBuild` (5.14.23 - 6.x)
+- `platyPS` (0.14.2 - 1.x)
+
+## Build pipeline
+
+Run full pipeline:
 
 ```powershell
 Invoke-Build
 ```
 
-Or run individual tasks:
+Default task order:
 
-Check git status (verifies branch and uncommitted changes):
+1. `CheckGitStatus` (expects `main` branch)
+2. `BuildModule`
+3. `ModuleImport`
+4. `GenerateMarkdownDocs`
+5. `RunTests`
+
+## Run individual tasks
 
 ```powershell
-Invoke-Build CheckGit -Verbose
-```
-
-Build the module (uses `Source\ModuleBuilder.ps1`):
-
-```powershell
+Invoke-Build CheckGitStatus
 Invoke-Build BuildModule
+Invoke-Build ModuleImport
+Invoke-Build GenerateMarkdownDocs
+Invoke-Build RunTests
 ```
 
-Run tests:
+## Folder layout
 
-```powershell
-Invoke-Build Test
-```
+- `Source/` - module source (`.psm1`, `.psd1`, `Public/`, `Private/`)
+- `Output/` - built module artifact
+- `Tests/` - Pester tests
+- `Docs/` - generated markdown help
+- `Build/` - shared build helper functions
 
-Notes on `-Verbose`
-This project uses `[CmdletBinding()]` in helper functions so passing `-Verbose` to `Invoke-Build` will surface diagnostic `Write-Verbose` output from functions like `Test-GitStatus`.
+## Common workflow
 
-How to scaffold a new module from this template
-1. Update `Source\NewModule.psd1` and `Source\NewModule.psm1` with your module metadata and code.
-2. Update or extend `Build/BuildFunctions.ps1` for any custom build checks or packaging steps.
-3. Adjust `Tests/` to include Pester tests for your module functions.
-4. Use `Invoke-Build` tasks to run the same CI-style steps locally and in CI.
+1. Add/modify functions in `Source/Public` or `Source/Private`
+2. Add/update tests in `Tests`
+3. Run `Invoke-Build`
+4. Import built module from `Output/NewModule`
 
-Customizing the build
-- Add or modify tasks in `.build.ps1` for additional steps (linting, changelog generation, publishing).
-- The build currently dot-sources `Build/BuildFunctions.ps1` so any new functions there are immediately available to tasks.
+## Fork setup checklist
 
-Contributing
-- This repository is intended as a personal/team template. Fork it, adapt it, and keep a clean history for your projects.
+When creating a new module from this template, update these first:
+
+1. **Module manifest**: `Source/NewModule.psd1`
+	- `RootModule`, `ModuleVersion`, `GUID`
+	- `Author`, `CompanyName`, `Description`
+	- `Tags`, `ProjectUri`, `LicenseUri`
+	- `FunctionsToExport` / `CmdletsToExport` / `AliasesToExport`
+2. **Module file name(s)**
+	- Rename `Source/NewModule.psm1` and `Source/NewModule.psd1` to your module name
+	- Keep manifest `RootModule` aligned with the `.psm1` file name
+3. **Tests**
+	- Replace sample tests in `Tests/`
+	- Update any hardcoded module import path/name references
+4. **Build defaults**
+	- If your default branch is not `main`, update `CheckGitStatus` in `.build.ps1`
+5. **Dependencies**
+	- Adjust module version policy in `Install-Requirements.ps1` (minimum/maximum ranges)
+6. **Documentation**
+	- Replace sample function help with your own comment-based help in `Source/Public/*.ps1`
+	- Regenerate markdown docs via `Invoke-Build GenerateMarkdownDocs`
+7. **README metadata**
+	- Update project name, usage examples, and links in this file
+
+## Notes
+
+- `Source/ModuleBuilder.ps1` builds from source manifest and writes to `Output/<ModuleName>`.
+- Markdown help generation depends on `ModuleImport` build task so the module name is available during docs generation.
