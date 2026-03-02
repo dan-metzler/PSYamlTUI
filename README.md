@@ -12,7 +12,6 @@ Minimal PowerShell module template with build, test, and docs automation.
 ## Prerequisites
 
 - PowerShell 5.1+ (PowerShell 7 recommended)
-- Git
 - PowerShellGet access to install modules
 
 ## Install dependencies
