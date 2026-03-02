@@ -1,6 +1,6 @@
 @{
     RootModule        = 'NewModule.psm1'
-    ModuleVersion     = '0.1.0'
+    ModuleVersion     = '0.0.1'
     GUID              = '11111111-1111-1111-1111-111111111111'
     Author            = 'Your Name'
     CompanyName       = 'Your Company'
