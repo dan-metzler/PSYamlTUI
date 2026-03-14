@@ -1,3 +1,11 @@
+[CmdletBinding()]
+param(
+    # Parameter help description
+    [Parameter(Mandatory)]
+    [ValidateSet("Local", "Full")]
+    [string]$Type
+)
+
 <#
 .SYNOPSIS
     Build orchestration script using InvokeBuild framework.
@@ -55,7 +63,7 @@ task BuildModule {
 #   - Module manifest (.psd1) exists in the Output directory
 #   - Module name is defined and non-empty in the manifest
 
-task ModuleImport {
+task ModuleImport BuildModule, {
     $getPsdFile = Get-ChildItem -Path "$PSScriptRoot\Output\*.psd1" -Recurse | Select-Object -First 1
     
     if (-not($getPsdFile)) {
@@ -117,4 +125,18 @@ task RunTests {
 #   4. GenerateMarkdownDocs  - Create function documentation (depends on ModuleImport)
 #   5. RunTests              - Verify module functionality via Pester
 
-task . CheckGitStatus, BuildModule, ModuleImport, GenerateMarkdownDocs, RunTests
+$buildType = switch ($Type) {
+    "Local" {
+        Write-Verbose "Executing local build pipeline..." -Verbose
+        Invoke-Build -Task BuildModule, ModuleImport
+    }
+    "Full" {
+        Write-Verbose "Executing full build pipeline..." -Verbose
+        Invoke-Build -Task CheckGitStatus, BuildModule, ModuleImport, GenerateMarkdownDocs, RunTests
+    }
+    default {
+        throw "Invalid build type specified. Use 'Local' or 'Full'."
+    }
+}
+
+task . $buildType
