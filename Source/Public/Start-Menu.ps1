@@ -19,6 +19,9 @@ function Start-Menu {
         Optional hashtable of label/value pairs shown in a status bar above the footer.
         Useful for displaying session context such as connected user, environment name, or
         API state. Values are display-only and never executed or parsed.
+    .PARAMETER Timer
+        When set, a stopwatch runs for each action executed and the elapsed time is
+        displayed in a bordered box after the action completes.
     .EXAMPLE
         Start-Menu -Path 'C:\MyApp\menu.yaml' -SettingsPath 'C:\MyApp\settings.json'
     #>
@@ -61,7 +64,11 @@ function Start-Menu {
         # Optional key/value pairs displayed in a status bar above the footer.
         # Evaluated once at Start-Menu call time; values are never executed or parsed.
         [Parameter()]
-        [hashtable]$StatusData
+        [hashtable]$StatusData,
+
+        # When set, a stopwatch runs for each action and the elapsed time is
+        # displayed after the action completes.
+        [switch]$Timer
     )
 
     # -- Validate key bindings --------------------------------------------------
@@ -116,6 +123,7 @@ function Start-Menu {
             -KeyBindings $KeyBindings `
             -StatusData $StatusData `
             -Theme $script:YamlTUI_Theme `
+            -Timer:$Timer `
             -IsRoot
 
         # Clear screen on clean exit
