@@ -25,9 +25,7 @@ param(
 # Import Dependencies and Build Functions
 # ============================================================================
 #Requires -Module ModuleBuilder
-#Requires -Module Pester
 #Requires -Module InvokeBuild
-#Requires -Module platyPS
 
 Import-Module InvokeBuild
 . "$PSScriptRoot\Build\BuildFunctions.ps1"
@@ -38,7 +36,7 @@ Import-Module InvokeBuild
 # Shared across all tasks to avoid redundant module discovery and imports.
 # Populated by the ModuleImport task and consumed by downstream tasks.
 
-$script:ModuleDetails = $null
+$script:moduleName = $null
 
 # ============================================================================
 # Define Build Tasks
@@ -53,27 +51,77 @@ task BuildModule {
 }
 
 # ============================================================================
+# Task: CopyLibFiles
+# ============================================================================
+# ModuleBuilder only inlines .ps1 files — it does not copy bundled binaries.
+# This task copies Source/lib/ (YamlDotNet.dll etc.) into the built output
+# so the compiled module can load its dependencies at runtime.
+
+task CopyLibFiles BuildModule, {
+    $srcLib = Join-Path (Join-Path $PSScriptRoot 'Source') 'lib'
+    $outDir = Get-ChildItem -Path "$PSScriptRoot\Output" -Filter '*.psd1' -Recurse |
+        Select-Object -First 1 | ForEach-Object { $_.DirectoryName }
+
+    if (-not $outDir) { throw "CopyLibFiles: could not locate Output module directory." }
+
+    $destLib = Join-Path $outDir 'lib'
+
+    if (Test-Path -LiteralPath $srcLib) {
+        $null = New-Item -ItemType Directory -Path $destLib -Force
+        Copy-Item -Path "$srcLib\*" -Destination $destLib -Recurse -Force
+        Write-Verbose "Copied lib/ to $destLib" -Verbose
+    }
+    else {
+        Write-Warning "CopyLibFiles: Source\lib\ not found — skipping. Run Install-Requirements.ps1 first."
+    }
+
+    # ModuleBuilder replaces the entire psm1 with inlined functions, discarding
+    # the DLL loader from Source/PSYamlTUI.psm1. Prepend an AppDomain-guard
+    # loader so the assembly is loaded on first import and silently skipped on
+    # subsequent Import-Module -Force calls in the same session.
+    $moduleName   = Split-Path $outDir -Leaf
+    $compiledPsm1 = Join-Path $outDir "$moduleName.psm1"
+    if (Test-Path -LiteralPath $compiledPsm1) {
+        $loader = @'
+# -- Load bundled YamlDotNet (injected by build pipeline) --------------------
+$_yt_lib = Join-Path $PSScriptRoot (Join-Path 'lib' 'YamlDotNet.dll')
+if (Test-Path -LiteralPath $_yt_lib) {
+    $_yt_loaded = [System.AppDomain]::CurrentDomain.GetAssemblies() |
+        Where-Object { $_.GetName().Name -eq 'YamlDotNet' }
+    if (-not $_yt_loaded) { Add-Type -Path $_yt_lib }
+}
+# ---------------------------------------------------------------------------
+
+'@
+        $existing = Get-Content -Path $compiledPsm1 -Raw
+        Set-Content -Path $compiledPsm1 -Value ($loader + $existing) -Encoding UTF8
+        Write-Verbose "Injected YamlDotNet loader into compiled psm1" -Verbose
+    }
+}
+
+# ============================================================================
 # Task: ModuleImport
 # ============================================================================
 # Validates and imports the compiled module into the current session.
-# Populates the script-scoped $script:ModuleDetails variable for use by
+# Populates the script-scoped $moduleName variable for use by
 # downstream tasks (e.g., GenerateMarkdownDocs, RunTests).
 #
 # Validations performed:
 #   - Module manifest (.psd1) exists in the Output directory
 #   - Module name is defined and non-empty in the manifest
 
-task ModuleImport BuildModule, {
+task ModuleImport BuildModule, CopyLibFiles, {
     $getPsdFile = Get-ChildItem -Path "$PSScriptRoot\Output\*.psd1" -Recurse | Select-Object -First 1
     
     if (-not($getPsdFile)) {
         throw "No .psd1 file found in the Output directory."
     }
 
-    $script:ModuleDetails = $getPsdFile | Import-Module -PassThru -Force
+    $script:moduleName = [System.IO.Path]::GetFileNameWithoutExtension($getPsdFile.Name)
 
-    if ([string]::IsNullOrEmpty($script:ModuleDetails.Name)) {
-        throw "Module name is missing in the .psd1 file. Confirm .psd1 file configuration."
+
+    if ([string]::IsNullOrEmpty($script:moduleName)) {
+        throw "Module name is missing in the .psd1 file."
     }
 }
 
@@ -81,18 +129,19 @@ task ModuleImport BuildModule, {
 # Task: GenerateMarkdownDocs
 # ============================================================================
 # Generates markdown documentation for all exported module functions using platyPS.
-# Depends on ModuleImport to ensure $script:ModuleDetails is populated.
+# Depends on ModuleImport to ensure $moduleName is populated.
 # Creates function reference documentation in the Docs directory.
 
 task GenerateMarkdownDocs ModuleImport, {
-    Write-Verbose "Generating Function Markdown Documentation..." -Verbose
+    Import-Module platyPS -ErrorAction Stop
+    Write-Verbose "Generating Function Markdown Documentation..."
 
     $docsPath = "$PSScriptRoot\Docs"
     if (-Not(Test-Path -Path $docsPath -PathType Container)) {
         throw "Could not find the Docs directory at $docsPath. Confirm the directory exists and try again."
     }
 
-    if (New-MarkdownHelp -Module $script:ModuleDetails.Name -OutputFolder $docsPath -Force) {
+    if (New-MarkdownHelp -Module $script:moduleName -OutputFolder $docsPath -Force) {
         Write-Verbose "Done." -Verbose
     }
     else {
@@ -108,6 +157,7 @@ task GenerateMarkdownDocs ModuleImport, {
 # Validates module functionality, command exports, and parameter sets.
 
 task RunTests {
+    Import-Module Pester -ErrorAction Stop
     Invoke-Pester -Script "$PSScriptRoot\Tests"
 }
 
@@ -125,18 +175,17 @@ task RunTests {
 #   4. GenerateMarkdownDocs  - Create function documentation (depends on ModuleImport)
 #   5. RunTests              - Verify module functionality via Pester
 
-$buildType = switch ($Type) {
+switch ($Type) {
     "Local" {
         Write-Verbose "Executing local build pipeline..." -Verbose
-        Invoke-Build -Task BuildModule, ModuleImport
+        task . BuildModule, ModuleImport, CopyLibFiles
     }
     "Full" {
         Write-Verbose "Executing full build pipeline..." -Verbose
-        Invoke-Build -Task CheckGitStatus, BuildModule, ModuleImport, GenerateMarkdownDocs, RunTests
+        task . CheckGitStatus, CopyLibFiles, BuildModule, ModuleImport, GenerateMarkdownDocs, RunTests
+
     }
     default {
         throw "Invalid build type specified. Use 'Local' or 'Full'."
     }
 }
-
-task . $buildType
