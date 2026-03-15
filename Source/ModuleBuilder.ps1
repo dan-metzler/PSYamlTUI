@@ -8,7 +8,7 @@
     package, and version the module artifact.
 
 .PARAMETER Version
-    The semantic version to assign to the built module. Defaults to "2.0.0" if not specified.
+    The semantic version to assign to the built module. Defaults to "1.0.0" if not specified.
     Used for versioning the module manifest during the build process.
 
 .NOTES
@@ -22,7 +22,7 @@
 param(
     [Parameter(Mandatory = $false)]
     [ValidateNotNull()]
-    [version]$Version = "2.0.0"
+    [version]$Version = "1.0.0"
 )
 
 #Requires -Module ModuleBuilder
@@ -44,13 +44,13 @@ if (-not($psdFile)) {
 # ============================================================================
 # Step 2: Import and Validate Module Metadata
 # ============================================================================
-# Imports the manifest to extract module details (name, version, etc.).
-# The -PassThru flag returns the module object for inspection and validation.
-# Ensures critical metadata is present before proceeding with the build.
+# Reads the manifest data file to extract module metadata (name, version, etc.)
+# without importing the module — avoids triggering RequiredAssemblies and any
+# assembly load conflicts (e.g. YamlDotNet already loaded in the session).
 
-$moduleDetails = Import-Module $psdFile.FullName -PassThru
+$moduleName = [System.IO.Path]::GetFileNameWithoutExtension($psdFile.Name)
 
-if ([string]::IsNullOrEmpty($moduleDetails.Name)) {
+if ([string]::IsNullOrEmpty($moduleName)) {
     throw "Module name is missing in the .psd1 file."
 }
 
@@ -67,7 +67,7 @@ if ([string]::IsNullOrEmpty($moduleDetails.Name)) {
 
 $params = @{
     SourcePath                 = "$PSScriptRoot"  # points to folder with NewModule.psd1 & NewModule.psm1
-    OutputDirectory            = "$PSScriptRoot\..\Output\$($moduleDetails.Name)"
+    OutputDirectory            = "$PSScriptRoot\..\.\Output\$moduleName"
     Version                    = $Version
     UnversionedOutputDirectory = $true
 }
@@ -82,7 +82,7 @@ $params = @{
 $success = $false
 try {
     Build-Module @params
-    $success = Test-Path "$PSScriptRoot\..\Output\$($moduleDetails.Name)\$($moduleDetails.Name).psd1"
+    $success = Test-Path "$PSScriptRoot\..\.\Output\$moduleName\$moduleName.psd1"
 }
 catch {
     Write-Error $_
@@ -95,6 +95,6 @@ catch {
 # with subsequent imports or builds.
 # Returns $true if the build succeeded, $false if it failed.
 
-Remove-Module -Name $moduleDetails.Name -Force -ErrorAction SilentlyContinue
+Remove-Module -Name $moduleName -Force -ErrorAction SilentlyContinue
 
 return $success
