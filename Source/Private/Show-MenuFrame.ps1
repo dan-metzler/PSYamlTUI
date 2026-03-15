@@ -48,6 +48,10 @@ function Show-MenuFrame {
         [Parameter()]
         [hashtable]$StatusData,
 
+        # When set, a stopwatch runs for each action and the elapsed time is
+        # displayed after the action completes.
+        [switch]$Timer,
+
         [Parameter(Mandatory)]
         [hashtable]$Theme
     )
@@ -91,7 +95,7 @@ function Show-MenuFrame {
                     # Recursive call — returning from it means the user pressed Back
                     Show-MenuFrame -MenuData $sub -RootDir $RootDir -TermProfile $TermProfile `
                         -Chars $Chars -Breadcrumb $newCrumb -KeyBindings $KeyBindings `
-                        -StatusData $StatusData -Theme $Theme
+                        -StatusData $StatusData -Theme $Theme -Timer:$Timer
 
                 }
                 else {
@@ -116,12 +120,34 @@ function Show-MenuFrame {
                         [Console]::Clear()
                         Write-BorderedText -TextContent "Running: $($sel.Label)" -TextColor $Theme.Title -BorderColor $Theme.Border -Chars $Chars
                         Write-Host ''
+
+                        if ($Timer) {
+                            $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+                        }
+
                         try {
                             Invoke-MenuAction -Node $sel -RootDir $RootDir
                         }
                         catch {
                             Write-Host "`nError: $_" -ForegroundColor Red
                         }
+
+                        if ($Timer) {
+                            $stopwatch.Stop()
+                            $e = $stopwatch.Elapsed
+                            $esc = [char]27
+                            $r = "${esc}[0m"
+                            $brightGreen = "${esc}[92m"
+                            $brightYellow = "${esc}[93m"
+                            $brightBlue = "${esc}[94m"
+                            $brightMagenta = "${esc}[95m"
+                            $darkGray = "${esc}[90m"
+                            $white = "${esc}[37m"
+
+                            $timerString = "${darkGray}$($Chars.BottomLeft)$($Chars['Arrow'])${r} ${white}$($e.ToString('hh'))${r}${brightBlue}h${r} ${white}$($e.ToString('mm'))${r}${brightMagenta}m${r} ${white}$($e.ToString('ss'))${r}${brightGreen}s${r} ${white}$($e.ToString('fff'))${r}${brightYellow}ms${r}"
+                            Write-BorderedText -TextContent $timerString -TextColor $Theme.Title -BorderColor 'DarkGray' -Chars $Chars
+                        }
+
                         Write-Host ''
                         Write-Host '  Press any key to return to menu...' -ForegroundColor $Theme.FooterText
                         $null = [Console]::ReadKey($true)
@@ -700,10 +726,14 @@ function Write-BorderedText {
     $cBorder = if ([string]::IsNullOrEmpty($BorderColor)) { $null } else { $BorderColor }
     $cText = if ([string]::IsNullOrEmpty($TextColor)) { $null } else { $TextColor }
 
-    # Inner content width: text + 2 leading spaces + at least 4 trailing spaces.
+    # Strip ANSI escape sequences before measuring -- the raw string length is
+    # inflated by invisible color codes, which throws off padding calculations.
+    $visibleLength = ($TextContent -replace '\x1b\[[0-9;]*m', '').Length
+
+    # Inner content width: visible text + 2 leading spaces + at least 4 trailing spaces.
     # Minimum of 40 keeps the box from being too narrow for very short labels.
-    $innerWidth = [Math]::Max(40, $TextContent.Length + 6)
-    $padRight = $innerWidth - 2 - $TextContent.Length
+    $innerWidth = [Math]::Max(40, $visibleLength + 6)
+    $padRight = $innerWidth - 2 - $visibleLength
 
     $top = $Chars.TopLeft + ($Chars.Horizontal * $innerWidth) + $Chars.TopRight
     $bottom = $Chars.BottomLeft + ($Chars.Horizontal * $innerWidth) + $Chars.BottomRight
