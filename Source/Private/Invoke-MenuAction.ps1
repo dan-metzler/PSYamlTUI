@@ -25,11 +25,16 @@ function Invoke-MenuAction {
         [string]$RootDir
     )
 
-    # Build splatting hashtable from node params (already validated as scalars)
+    # Build splatting hashtable from node params (already validated as scalars).
+    # YamlDotNet returns unquoted YAML booleans as strings; convert them to native
+    # PS booleans so SwitchParameter binding succeeds.
     $splatParams = @{}
     if ($null -ne $Node.Params) {
         foreach ($key in $Node.Params.Keys) {
-            $splatParams[[string]$key] = $Node.Params[$key]
+            $val = $Node.Params[$key]
+            if ($val -is [string] -and $val -eq 'true') { $val = $true }
+            elseif ($val -is [string] -and $val -eq 'false') { $val = $false }
+            $splatParams[[string]$key] = $val
         }
     }
 
