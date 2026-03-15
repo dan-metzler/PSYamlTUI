@@ -5,7 +5,7 @@
 
 
 ### UI
-- [ ] Once a valid non branch node is selected then we want to display a clean heading of the item that is being run, and then we want
+- [x] Once a valid non branch node is selected then we want to display a clean heading of the item that is being run, and then we want
 - [x] -Timer switch on start-menu, when a function or script file is called should we have it wrapped in a start and stop stopwatch and cleanly display processing time. if function fails or is stopped via ctrl+c mid way through. proper variable cleanup when looping back through.
 
 ### UX
