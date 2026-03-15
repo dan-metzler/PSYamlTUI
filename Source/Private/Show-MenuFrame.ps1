@@ -114,6 +114,7 @@ function Show-MenuFrame {
 
                     if ($proceed) {
                         [Console]::Clear()
+                        Write-BorderedText -TextContent "Running: $($sel.Label)" -TextColor $Theme.Title -BorderColor $Theme.Border -Chars $Chars
                         Write-Host ''
                         try {
                             Invoke-MenuAction -Node $sel -RootDir $RootDir
@@ -654,5 +655,84 @@ function Build-HostLines {
     $lines += @{ Text = (Get-HRule $Chars.BottomLeft $Chars.BottomRight $InnerWidth $Chars); Color = $cBorder }
 
     return $lines
+}
+
+# -- Action banner ------------------------------------------------------------
+
+function Write-BorderedText {
+    <#
+    .SYNOPSIS
+        Renders a single-line bordered box announcing the currently executing leaf node.
+    .DESCRIPTION
+        Draws a top border, a content line, and a bottom border using the same character
+        set as the menu frame. Colors are sourced from the active theme. Intended to be
+        called immediately after [Console]::Clear() in the leaf-node execution block so
+        the user can see which action is running before any script output appears.
+    .PARAMETER TextContent
+        The text to display inside the box (e.g. "Running: My-Script").
+    .PARAMETER BorderColor
+        ConsoleColor name for the box-drawing characters. Pass $Theme.Border.
+    .PARAMETER TextColor
+        ConsoleColor name for the text inside the box. Pass $Theme.Title.
+    .PARAMETER Chars
+        Character set hashtable from Get-CharacterSet. Supplies the correct border
+        glyphs for the active border style (Unicode or ASCII).
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$TextContent,
+
+        [Parameter(Mandatory)]
+        [AllowEmptyString()]
+        [string]$BorderColor,
+
+        [Parameter(Mandatory)]
+        [AllowEmptyString()]
+        [string]$TextColor,
+
+        [Parameter(Mandatory)]
+        [hashtable]$Chars
+    )
+
+    # Normalize empty-string theme colors to $null so Write-Host receives no
+    # -ForegroundColor argument rather than an invalid empty-string color name.
+    $cBorder = if ([string]::IsNullOrEmpty($BorderColor)) { $null } else { $BorderColor }
+    $cText = if ([string]::IsNullOrEmpty($TextColor)) { $null } else { $TextColor }
+
+    # Inner content width: text + 2 leading spaces + at least 4 trailing spaces.
+    # Minimum of 40 keeps the box from being too narrow for very short labels.
+    $innerWidth = [Math]::Max(40, $TextContent.Length + 6)
+    $padRight = $innerWidth - 2 - $TextContent.Length
+
+    $top = $Chars.TopLeft + ($Chars.Horizontal * $innerWidth) + $Chars.TopRight
+    $bottom = $Chars.BottomLeft + ($Chars.Horizontal * $innerWidth) + $Chars.BottomRight
+    $leftEdge = $Chars.Vertical + ' '
+    $rightEdge = (' ' * $padRight) + ' ' + $Chars.Vertical
+
+    if ($null -ne $cBorder) {
+        Write-Host -Object $top -ForegroundColor $cBorder
+        Write-Host -Object $leftEdge -NoNewline -ForegroundColor $cBorder
+    }
+    else {
+        Write-Host -Object $top
+        Write-Host -Object $leftEdge -NoNewline
+    }
+
+    if ($null -ne $cText) {
+        Write-Host -Object $TextContent -NoNewline -ForegroundColor $cText
+    }
+    else {
+        Write-Host -Object $TextContent -NoNewline
+    }
+
+    if ($null -ne $cBorder) {
+        Write-Host -Object $rightEdge -ForegroundColor $cBorder
+        Write-Host -Object $bottom -ForegroundColor $cBorder
+    }
+    else {
+        Write-Host -Object $rightEdge
+        Write-Host -Object $bottom
+    }
 }
 
