@@ -1,3 +1,14 @@
+function Read-ConsoleKey {
+    <#
+    .SYNOPSIS
+        Thin wrapper around [Console]::ReadKey so tests can mock it.
+    #>
+    [CmdletBinding()]
+    [OutputType([System.ConsoleKeyInfo])]
+    param()
+    return [Console]::ReadKey($true)
+}
+
 function Show-MenuFrame {
     <#
     .SYNOPSIS
@@ -76,7 +87,7 @@ function Show-MenuFrame {
             -Breadcrumb $Breadcrumb -TermProfile $TermProfile -Chars $Chars -KeyBindings $KeyBindings `
             -StatusData $StatusData -Theme $Theme
 
-        $key = [Console]::ReadKey($true)
+        $key = Read-ConsoleKey
 
         $action = Resolve-KeyAction -Key $key -Bindings $KeyBindings
 
@@ -117,7 +128,7 @@ function Show-MenuFrame {
                             Write-Host "  Hook error: $_" -ForegroundColor Red
                             Write-Host ''
                             Write-Host '  Press any key to return to menu...' -ForegroundColor $Theme.FooterText
-                            $null = [Console]::ReadKey($true)
+                            $null = Read-ConsoleKey
                             $branchProceeds = $false
                         }
                     }
@@ -157,7 +168,7 @@ function Show-MenuFrame {
                             Write-Host "  Hook error: $_" -ForegroundColor Red
                             Write-Host ''
                             Write-Host '  Press any key to return to menu...' -ForegroundColor $Theme.FooterText
-                            $null = [Console]::ReadKey($true)
+                            $null = Read-ConsoleKey
                             $proceed = $false
                         }
                     }
@@ -171,7 +182,7 @@ function Show-MenuFrame {
                         }
                         Write-Host ''
                         Write-Host '  Are you sure? [Y/N]: ' -NoNewline -ForegroundColor $Theme.ItemSelected
-                        $ck = [Console]::ReadKey($true)
+                        $ck = Read-ConsoleKey
                         Write-Host $ck.KeyChar
                         $proceed = ($ck.KeyChar -ieq 'y')
                     }
@@ -210,7 +221,7 @@ function Show-MenuFrame {
 
                         Write-Host ''
                         Write-Host '  Press any key to return to menu...' -ForegroundColor $Theme.FooterText
-                        $null = [Console]::ReadKey($true)
+                        $null = Read-ConsoleKey
                     }
                 }
             }
