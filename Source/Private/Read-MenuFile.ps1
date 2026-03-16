@@ -221,6 +221,7 @@ function Resolve-MenuItems {
             }
             if ($item.ContainsKey('description')) { $syntheticBranch['description'] = $item['description'] }
             if ($item.ContainsKey('hotkey')) { $syntheticBranch['hotkey'] = $item['hotkey'] }
+            if ($item.ContainsKey('before')) { $syntheticBranch['before'] = $item['before'] }
 
             $result += Assert-MenuItem -Item $syntheticBranch -RootDir $RootDir -LineMap $LineMap
         }
@@ -269,6 +270,12 @@ function Assert-MenuItem {
         }
     }
 
+    # -- Optional 'before' hook(s) -----------------------------------------------
+    $before = @()
+    if ($Item.ContainsKey('before')) {
+        $before = Assert-BeforeHooks -Value $Item['before'] -Label $label -LineHint $lineHint
+    }
+
     # -- 1. EXIT ----------------------------------------------------------------
     if ($Item.ContainsKey('exit') -and $Item['exit'] -eq $true) {
         return [PSCustomObject]@{
@@ -276,6 +283,7 @@ function Assert-MenuItem {
             Label       = $label
             Description = $description
             Hotkey      = $hotkey
+            Before      = $before
         }
     }
 
@@ -296,6 +304,7 @@ function Assert-MenuItem {
             Description = $description
             Hotkey      = $hotkey
             Children    = $resolvedChildren
+            Before      = $before
         }
     }
 
@@ -347,6 +356,7 @@ function Assert-MenuItem {
             Call        = $call
             Params      = $params
             Confirm     = $confirm
+            Before      = $before
         }
     }
 
@@ -359,6 +369,132 @@ function Assert-MenuItem {
         Call        = $call
         Params      = $params
         Confirm     = $confirm
+        Before      = $before
     }
+}
+
+# -- Before hook helpers -------------------------------------------------------
+
+function Assert-BeforeHooks {
+    <#
+    .SYNOPSIS
+        Normalizes and validates the 'before' value from a menu node.
+        Returns an array of hook definition hashtables, each with 'Hook' (string)
+        and 'Params' (hashtable). Supports string shorthand, single mapping, or
+        an array of mappings.
+    #>
+    [CmdletBinding()]
+    [OutputType([array])]
+    param(
+        [Parameter(Mandatory)]
+        $Value,
+
+        [Parameter(Mandatory)]
+        [string]$Label,
+
+        [Parameter()]
+        [string]$LineHint = ''
+    )
+
+    if ($Value -is [string]) {
+        # Shorthand: before: "FunctionName"
+        Assert-HookName -Name $Value -Label $Label -LineHint $LineHint
+        return @(@{ Hook = $Value; Params = @{} })
+    }
+
+    if ($Value -is [hashtable]) {
+        # Single mapping: before: { hook: "...", params: {} }
+        return @(Assert-HookObject -HookHt $Value -Label $Label -LineHint $LineHint)
+    }
+
+    if ($Value -is [array]) {
+        # Multiple hooks: before: [{ hook: "..." }, ...]
+        $result = [System.Collections.Generic.List[object]]::new()
+        foreach ($entry in $Value) {
+            if (-not ($entry -is [hashtable])) {
+                throw "Item '$Label'${LineHint}: each entry in a 'before' array must be a mapping with a 'hook' key."
+            }
+            $result.Add((Assert-HookObject -HookHt $entry -Label $Label -LineHint $LineHint))
+        }
+        return $result.ToArray()
+    }
+
+    throw "Item '$Label'${LineHint}: 'before' must be a function name string, a hook mapping, or an array of hook mappings."
+}
+
+function Assert-HookName {
+    <#
+    .SYNOPSIS
+        Validates that a hook name is a safe PowerShell function name.
+        Rejects names with path separators, file extensions, or shell operators.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$Name,
+
+        [Parameter(Mandatory)]
+        [string]$Label,
+
+        [Parameter()]
+        [string]$LineHint = ''
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Name)) {
+        throw "Item '$Label'${LineHint}: hook name must not be empty."
+    }
+    if ($Name -match '[|;&>]') {
+        throw "Item '$Label'${LineHint}: hook name '$Name' contains an invalid character ('|', ';', '&', '>'). Use a plain function name."
+    }
+    if ($Name -match '[/\\]') {
+        throw "Item '$Label'${LineHint}: hook name '$Name' must not contain path separators. Specify a function name only, not a script path."
+    }
+    if ($Name -match '\.\w+$') {
+        throw "Item '$Label'${LineHint}: hook name '$Name' must not have a file extension. Specify a function name only, not a script path."
+    }
+}
+
+function Assert-HookObject {
+    <#
+    .SYNOPSIS
+        Validates and normalizes a single hook mapping (must have 'hook' key;
+        'params' is optional). Returns @{ Hook = string; Params = hashtable }.
+    #>
+    [CmdletBinding()]
+    [OutputType([hashtable])]
+    param(
+        [Parameter(Mandatory)]
+        [hashtable]$HookHt,
+
+        [Parameter(Mandatory)]
+        [string]$Label,
+
+        [Parameter()]
+        [string]$LineHint = ''
+    )
+
+    if (-not $HookHt.ContainsKey('hook')) {
+        throw "Item '$Label'${LineHint}: a 'before' hook mapping must have a 'hook' key specifying the function name."
+    }
+
+    $hookName = [string]$HookHt['hook']
+    Assert-HookName -Name $hookName -Label $Label -LineHint $LineHint
+
+    $params = @{}
+    if ($HookHt.ContainsKey('params')) {
+        $rawParams = $HookHt['params']
+        if (-not ($rawParams -is [hashtable])) {
+            throw "Item '$Label'${LineHint}: hook '$hookName' params must be a mapping of key/value pairs."
+        }
+        foreach ($k in $rawParams.Keys) {
+            $v = $rawParams[$k]
+            if ($v -is [hashtable] -or $v -is [array]) {
+                throw "Item '$Label'${LineHint}: hook '$hookName' param '$k' must be a string, bool, or number - nested objects are not allowed."
+            }
+        }
+        $params = $rawParams
+    }
+
+    return @{ Hook = $hookName; Params = $params }
 }
 
