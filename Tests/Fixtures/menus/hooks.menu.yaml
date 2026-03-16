@@ -1,0 +1,14 @@
+menu:
+  title: "Hooks Menu"
+  items:
+    - label: "Gated Section"
+      before:
+        hook: "Test-BranchHook"
+        params:
+          role: "admin"
+      children:
+        - label: "Gated Action"
+          before: "Test-LeafHook"
+          call: "./scripts/gated.ps1"
+    - label: "Exit"
+      exit: true

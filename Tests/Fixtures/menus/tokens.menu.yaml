@@ -1,0 +1,9 @@
+menu:
+  title: "{{appName}}"
+  items:
+    - label: "Deploy to {{environment}}"
+      call: "{{scriptsPath}}/deploy.ps1"
+      params:
+        env: "{{environment}}"
+    - label: "Exit"
+      exit: true

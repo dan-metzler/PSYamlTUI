@@ -1,0 +1,4 @@
+# Partial theme override fixture - used for future YAML theme file support tests.
+# Only overrides two keys; the remaining eight keys should fall back to Default theme values.
+Border: "Blue"
+Title:  "White"

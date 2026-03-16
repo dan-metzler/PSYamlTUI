@@ -1,0 +1,4 @@
+vars:
+  appName:     "TestApp"
+  environment: "test"
+  scriptsPath: "./scripts"

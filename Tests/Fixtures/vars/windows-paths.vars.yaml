@@ -1,0 +1,3 @@
+vars:
+  scriptsPath: 'C:\scripts\myapp'
+  logPath:     'C:\logs\myapp'
