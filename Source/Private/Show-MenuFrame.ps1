@@ -52,6 +52,12 @@ function Show-MenuFrame {
         # displayed after the action completes.
         [switch]$Timer,
 
+        # Before hooks inherited from ancestor BRANCH nodes. Any hooks defined on
+        # a BRANCH are accumulated and passed down so they gate both submenu entry
+        # and leaf execution at every nested level.
+        [Parameter()]
+        [array]$InheritedHooks = @(),
+
         [Parameter(Mandatory)]
         [hashtable]$Theme
     )
@@ -90,19 +96,73 @@ function Show-MenuFrame {
 
                 }
                 elseif ($sel.NodeType -eq 'BRANCH') {
-                    $sub = [PSCustomObject]@{ Title = $sel.Label; Items = $sel.Children }
-                    $newCrumb = $Breadcrumb + @($title)
-                    # Recursive call — returning from it means the user pressed Back
-                    Show-MenuFrame -MenuData $sub -RootDir $RootDir -TermProfile $TermProfile `
-                        -Chars $Chars -Breadcrumb $newCrumb -KeyBindings $KeyBindings `
-                        -StatusData $StatusData -Theme $Theme -Timer:$Timer
+                    # Accumulate hooks: inherited from ancestor frames + this branch's own.
+                    # The combined list is passed to the recursive frame so all descendants
+                    # inherit every ancestor hook as well as this branch's hooks.
+                    $hooksList = [System.Collections.Generic.List[object]]::new()
+                    foreach ($h in $InheritedHooks) { $hooksList.Add($h) }
+                    if ($null -ne $sel.Before -and $sel.Before.Count -gt 0) {
+                        foreach ($h in $sel.Before) { $hooksList.Add($h) }
+                    }
+
+                    $branchProceeds = $true
+                    if ($hooksList.Count -gt 0) {
+                        try {
+                            $hookResult = Invoke-BeforeHook -Hooks $hooksList.ToArray()
+                            if ($hookResult -eq $false) { $branchProceeds = $false }
+                        }
+                        catch {
+                            [Console]::Clear()
+                            Write-Host ''
+                            Write-Host "  Hook error: $_" -ForegroundColor Red
+                            Write-Host ''
+                            Write-Host '  Press any key to return to menu...' -ForegroundColor $Theme.FooterText
+                            $null = [Console]::ReadKey($true)
+                            $branchProceeds = $false
+                        }
+                    }
+
+                    if ($branchProceeds) {
+                        $sub = [PSCustomObject]@{ Title = $sel.Label; Items = $sel.Children }
+                        $newCrumb = $Breadcrumb + @($title)
+                        # Recursive call -- returning from it means the user pressed Back.
+                        # Pass accumulated hooks so all descendants inherit them.
+                        Show-MenuFrame -MenuData $sub -RootDir $RootDir -TermProfile $TermProfile `
+                            -Chars $Chars -Breadcrumb $newCrumb -KeyBindings $KeyBindings `
+                            -StatusData $StatusData -Theme $Theme -Timer:$Timer `
+                            -InheritedHooks $hooksList.ToArray()
+                    }
 
                 }
                 else {
                     # SCRIPT or FUNCTION node
                     $proceed = $true
 
-                    if ($sel.Confirm) {
+                    # Collect and run before hooks before the confirm prompt and execution.
+                    # Inherited hooks (from ancestor BRANCHes) run first, then node-level hooks.
+                    $hooksList = [System.Collections.Generic.List[object]]::new()
+                    foreach ($h in $InheritedHooks) { $hooksList.Add($h) }
+                    if ($null -ne $sel.Before -and $sel.Before.Count -gt 0) {
+                        foreach ($h in $sel.Before) { $hooksList.Add($h) }
+                    }
+
+                    if ($hooksList.Count -gt 0) {
+                        try {
+                            $hookResult = Invoke-BeforeHook -Hooks $hooksList.ToArray()
+                            if ($hookResult -eq $false) { $proceed = $false }
+                        }
+                        catch {
+                            [Console]::Clear()
+                            Write-Host ''
+                            Write-Host "  Hook error: $_" -ForegroundColor Red
+                            Write-Host ''
+                            Write-Host '  Press any key to return to menu...' -ForegroundColor $Theme.FooterText
+                            $null = [Console]::ReadKey($true)
+                            $proceed = $false
+                        }
+                    }
+
+                    if ($proceed -and $sel.Confirm) {
                         [Console]::Clear()
                         Write-Host ''
                         Write-Host "  Confirm: $($sel.Label)" -ForegroundColor $Theme.ItemSelected
