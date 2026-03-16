@@ -28,6 +28,14 @@ function Invoke-BeforeHook {
     foreach ($hookDef in $Hooks) {
         $hookName = [string]$hookDef.Hook
 
+        # Defense-in-depth: reject bad hook names even if they somehow bypassed parse-time validation.
+        if ($hookName -match '[/\\]') {
+            throw "Before hook '$hookName' must not contain path separators. Specify a function name only, not a script path."
+        }
+        if ($hookName -match '\.\w+$') {
+            throw "Before hook '$hookName' must not have a file extension. Specify a function name only, not a script path."
+        }
+
         # Whitelist via Get-Command before calling -- same guard used in Invoke-MenuAction.
         # Function-type only: anonymous scriptblocks and aliases are not supported.
         $cmd = Get-Command -Name $hookName -CommandType Function -ErrorAction SilentlyContinue
