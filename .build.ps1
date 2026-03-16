@@ -3,7 +3,13 @@ param(
     # Parameter help description
     [Parameter(Mandatory)]
     [ValidateSet("Local", "Full")]
-    [string]$Type
+    [string]$Type,
+
+    [Parameter()]
+    [string]$Version = $(
+        $tag = git describe --tags --abbrev=0 2>$null
+        if ($tag) { $tag.TrimStart('v') } else { '0.1.0' }
+    )
 )
 
 <#
@@ -60,7 +66,7 @@ task BuildModule {
 task CopyLibFiles BuildModule, {
     $srcLib = Join-Path (Join-Path $PSScriptRoot 'Source') 'lib'
     $outDir = Get-ChildItem -Path "$PSScriptRoot\Output" -Filter '*.psd1' -Recurse |
-        Select-Object -First 1 | ForEach-Object { $_.DirectoryName }
+    Select-Object -First 1 | ForEach-Object { $_.DirectoryName }
 
     if (-not $outDir) { throw "CopyLibFiles: could not locate Output module directory." }
 
@@ -79,7 +85,7 @@ task CopyLibFiles BuildModule, {
     # the DLL loader from Source/PSYamlTUI.psm1. Prepend an AppDomain-guard
     # loader so the assembly is loaded on first import and silently skipped on
     # subsequent Import-Module -Force calls in the same session.
-    $moduleName   = Split-Path $outDir -Leaf
+    $moduleName = Split-Path $outDir -Leaf
     $compiledPsm1 = Join-Path $outDir "$moduleName.psm1"
     if (Test-Path -LiteralPath $compiledPsm1) {
         $loader = @'
