@@ -244,16 +244,25 @@ function Resolve-MenuItems {
                 throw "Imported file '$fullImportPath' must have a top-level 'items' key."
             }
 
-            # Build a synthetic BRANCH hashtable with the imported children
-            $syntheticBranch = @{
-                label    = $label
-                children = Resolve-MenuItems -Items $importedRaw['items'] -RootDir $RootDir -LineMap $LineMap -Tokens $Tokens
+            # Resolve imported items first, then build PSCustomObject directly.
+            # Do NOT pass through Assert-MenuItem -- it would call Resolve-MenuItems
+            # a second time on the already-resolved PSCustomObjects, which fails.
+            $resolvedImportedItems = Resolve-MenuItems -Items $importedRaw['items'] -RootDir $RootDir -LineMap $LineMap -Tokens $Tokens
+            $importDesc = if ($item.ContainsKey('description')) { [string]$item['description'] } else { $null }
+            $importHotkey = if ($item.ContainsKey('hotkey')) { [string]$item['hotkey'] }      else { $null }
+            $importBefore = @()
+            if ($item.ContainsKey('before')) {
+                $importBefore = @(Assert-BeforeHooks -Value $item['before'] -Label $label -LineHint '')
             }
-            if ($item.ContainsKey('description')) { $syntheticBranch['description'] = $item['description'] }
-            if ($item.ContainsKey('hotkey')) { $syntheticBranch['hotkey'] = $item['hotkey'] }
-            if ($item.ContainsKey('before')) { $syntheticBranch['before'] = $item['before'] }
 
-            $result += Assert-MenuItem -Item $syntheticBranch -RootDir $RootDir -LineMap $LineMap -Tokens $Tokens
+            $result += [PSCustomObject]@{
+                NodeType    = 'BRANCH'
+                Label       = $label
+                Description = $importDesc
+                Hotkey      = $importHotkey
+                Children    = $resolvedImportedItems
+                Before      = $importBefore
+            }
         }
         else {
             $result += Assert-MenuItem -Item $item -RootDir $RootDir -LineMap $LineMap -Tokens $Tokens
@@ -306,7 +315,9 @@ function Assert-MenuItem {
     # -- Optional 'before' hook(s) -----------------------------------------------
     $before = @()
     if ($Item.ContainsKey('before')) {
-        $before = Assert-BeforeHooks -Value $Item['before'] -Label $label -LineHint $lineHint
+        # @() forces the result to always be an array -- without it, a single-hook
+        # return value gets pipeline-unwrapped to a plain hashtable by PowerShell.
+        $before = @(Assert-BeforeHooks -Value $Item['before'] -Label $label -LineHint $lineHint)
     }
 
     # -- 1. EXIT ----------------------------------------------------------------
