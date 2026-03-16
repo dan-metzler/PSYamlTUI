@@ -1,0 +1,13 @@
+menu:
+  title: "Nested Menu"
+  items:
+    - label: "Level One"
+      children:
+        - label: "Level Two"
+          children:
+            - label: "Deep Action"
+              call: "./scripts/deep.ps1"
+        - label: "Level Two Action"
+          call: "./scripts/l2.ps1"
+    - label: "Exit"
+      exit: true
