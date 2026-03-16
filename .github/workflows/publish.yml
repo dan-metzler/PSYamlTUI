@@ -1,0 +1,47 @@
+name: Build and Publish
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  publish:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # required so git describe can see tags
+
+      - name: Install build dependencies
+        shell: pwsh
+        run: |
+          Install-Module -Name InvokeBuild   -Force -Scope CurrentUser
+          Install-Module -Name ModuleBuilder -Force -Scope CurrentUser
+          Install-Module -Name platyPS       -Force -Scope CurrentUser
+          Install-Module -Name Pester        -Force -Scope CurrentUser
+
+      - name: Install module requirements
+        shell: pwsh
+        run: .\Install-Requirements.ps1
+
+      - name: Run full build
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          .\\.build.ps1 -Type Full -Version $version
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          generate_release_notes: true
+          files: PSYamlTUI-${{ github.ref_name }}.zip
+
+      # - name: Publish to PowerShell Gallery
+      #   shell: pwsh
+      #   run: |
+      #     Publish-Module -Path .\Output\PSYamlTUI -NuGetApiKey ${{ secrets.PSGALLERY_API_KEY }}
