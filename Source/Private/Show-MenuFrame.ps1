@@ -83,7 +83,7 @@ function Show-MenuFrame {
         if ($IsRoot -and $script:YamlTUI_Home) { $script:YamlTUI_Home = $false }
 
         # Render the full frame
-        Render-MenuFrame -Title $title -Items $items -SelectedIndex $idx `
+        Write-MenuFrame -Title $title -Items $items -SelectedIndex $idx `
             -Breadcrumb $Breadcrumb -TermProfile $TermProfile -Chars $Chars -KeyBindings $KeyBindings `
             -StatusData $StatusData -Theme $Theme
 
@@ -364,7 +364,7 @@ function Get-FooterText {
 
 # -- Rendering dispatcher ------------------------------------------------------
 
-function Render-MenuFrame {
+function Write-MenuFrame {
     [CmdletBinding()]
     param(
         [string]$Title,
