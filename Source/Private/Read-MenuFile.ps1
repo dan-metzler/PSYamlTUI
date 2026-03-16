@@ -8,10 +8,14 @@ function Read-MenuFile {
         ready for use by Show-MenuFrame.
     .PARAMETER Path
         Absolute or relative path to the root menu.yaml file.
-    .PARAMETER SettingsPath
-        Optional path to a JSON file containing key/value pairs. Any {{key}} token
-        in the YAML (labels, descriptions, params, call values) is replaced with the
-        matching value before the YAML is parsed. If omitted, no substitution occurs.
+    .PARAMETER VarsPath
+        Optional path to a vars.yaml file. Must have a top-level 'vars' map. Any
+        {{key}} token in the YAML is replaced with the matching value before parsing.
+        Applied to root content and to imported submenu files. If omitted and no
+        Context is supplied, no substitution occurs.
+    .PARAMETER Context
+        Optional hashtable of runtime values. Merged over VarsPath values; Context
+        wins on any key conflict.
     .OUTPUTS
         PSCustomObject with Title and Items (array of validated node PSCustomObjects)
     #>
@@ -21,7 +25,10 @@ function Read-MenuFile {
         [string]$Path,
 
         [Parameter()]
-        [string]$SettingsPath
+        [string]$VarsPath,
+
+        [Parameter()]
+        [hashtable]$Context
     )
 
     # Resolve to absolute path for consistent root-jailing downstream
@@ -33,18 +40,32 @@ function Read-MenuFile {
     $rootDir = [System.IO.Path]::GetDirectoryName($resolvedPath)
     $content = Get-Content -LiteralPath $resolvedPath -Raw -Encoding UTF8
 
-    # -- Optional settings substitution ----------------------------------------
-    # Replaces every {{key}} token in the raw YAML with the matching value from
-    # the JSON file before any parsing occurs. Unknown tokens are left as-is.
-    if (-not [string]::IsNullOrWhiteSpace($SettingsPath)) {
-        $resolvedSettings = [System.IO.Path]::GetFullPath($SettingsPath)
-        if (-not (Test-Path -LiteralPath $resolvedSettings)) {
-            throw "Settings file not found: $resolvedSettings"
+    # -- Build token substitution dictionary ------------------------------------
+    # Merge vars.yaml values first, then Context on top (Context wins on conflict).
+    # Unknown tokens are left as-is. Applied to root content before parsing; the
+    # same token dict is passed down into Resolve-MenuItems for imported files.
+    $tokens = @{}
+    if (-not [string]::IsNullOrWhiteSpace($VarsPath)) {
+        if (-not (Test-Path -LiteralPath $VarsPath)) {
+            throw "Vars file not found: $VarsPath"
         }
-        $settingsJson = Get-Content -LiteralPath $resolvedSettings -Raw -Encoding UTF8
-        $settings = $settingsJson | ConvertFrom-Json
-        foreach ($key in $settings.PSObject.Properties.Name) {
-            $content = $content -replace [regex]::Escape("{{$key}}"), [string]$settings.$key
+        $varsContent = Get-Content -LiteralPath $VarsPath -Raw -Encoding UTF8
+        $varsRaw = ConvertFrom-YamlText -Content $varsContent
+        if (-not ($varsRaw -is [hashtable]) -or -not $varsRaw.ContainsKey('vars')) {
+            throw "Vars file '$VarsPath' must have a top-level 'vars' key."
+        }
+        foreach ($k in $varsRaw['vars'].Keys) {
+            $tokens[[string]$k] = [string]$varsRaw['vars'][$k]
+        }
+    }
+    if ($null -ne $Context) {
+        foreach ($k in $Context.Keys) {
+            $tokens[[string]$k] = [string]$Context[$k]
+        }
+    }
+    if ($tokens.Count -gt 0) {
+        foreach ($k in $tokens.Keys) {
+            $content = $content.Replace("{{$k}}", [string]$tokens[$k])
         }
     }
 
@@ -65,7 +86,7 @@ function Read-MenuFile {
 
     [PSCustomObject]@{
         Title = if ($menuNode.ContainsKey('title')) { [string]$menuNode['title'] } else { 'Menu' }
-        Items = Resolve-MenuItems -Items $menuNode['items'] -RootDir $rootDir -LineMap $lineMap
+        Items = Resolve-MenuItems -Items $menuNode['items'] -RootDir $rootDir -LineMap $lineMap -Tokens $tokens
     }
 }
 
@@ -164,7 +185,10 @@ function Resolve-MenuItems {
         [string]$RootDir,
 
         [Parameter()]
-        [hashtable]$LineMap = @{}
+        [hashtable]$LineMap = @{},
+
+        [Parameter()]
+        [hashtable]$Tokens = @{}
     )
 
     $result = @()
@@ -208,6 +232,12 @@ function Resolve-MenuItems {
             }
 
             $importedContent = Get-Content -LiteralPath $fullImportPath -Raw -Encoding UTF8
+            # Apply the same token substitution pass to imported file content
+            if ($Tokens.Count -gt 0) {
+                foreach ($tk in $Tokens.Keys) {
+                    $importedContent = $importedContent.Replace("{{$tk}}", [string]$Tokens[$tk])
+                }
+            }
             $importedRaw = ConvertFrom-YamlText -Content $importedContent
 
             if (-not ($importedRaw -is [hashtable]) -or -not $importedRaw.ContainsKey('items')) {
@@ -217,16 +247,16 @@ function Resolve-MenuItems {
             # Build a synthetic BRANCH hashtable with the imported children
             $syntheticBranch = @{
                 label    = $label
-                children = Resolve-MenuItems -Items $importedRaw['items'] -RootDir $RootDir -LineMap $LineMap
+                children = Resolve-MenuItems -Items $importedRaw['items'] -RootDir $RootDir -LineMap $LineMap -Tokens $Tokens
             }
             if ($item.ContainsKey('description')) { $syntheticBranch['description'] = $item['description'] }
             if ($item.ContainsKey('hotkey')) { $syntheticBranch['hotkey'] = $item['hotkey'] }
             if ($item.ContainsKey('before')) { $syntheticBranch['before'] = $item['before'] }
 
-            $result += Assert-MenuItem -Item $syntheticBranch -RootDir $RootDir -LineMap $LineMap
+            $result += Assert-MenuItem -Item $syntheticBranch -RootDir $RootDir -LineMap $LineMap -Tokens $Tokens
         }
         else {
-            $result += Assert-MenuItem -Item $item -RootDir $RootDir -LineMap $LineMap
+            $result += Assert-MenuItem -Item $item -RootDir $RootDir -LineMap $LineMap -Tokens $Tokens
         }
     }
 
@@ -253,7 +283,10 @@ function Assert-MenuItem {
         [string]$RootDir,
 
         [Parameter()]
-        [hashtable]$LineMap = @{}
+        [hashtable]$LineMap = @{},
+
+        [Parameter()]
+        [hashtable]$Tokens = @{}
     )
 
     $label = [string]$Item['label']
@@ -297,7 +330,7 @@ function Assert-MenuItem {
             throw "Item '$label'${lineHint}: 'children' array must not be empty."
         }
         # Recursively resolve children so every descendant gets a proper NodeType
-        $resolvedChildren = Resolve-MenuItems -Items $children -RootDir $RootDir -LineMap $LineMap
+        $resolvedChildren = Resolve-MenuItems -Items $children -RootDir $RootDir -LineMap $LineMap -Tokens $Tokens
         return [PSCustomObject]@{
             NodeType    = 'BRANCH'
             Label       = $label

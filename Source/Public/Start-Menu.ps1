@@ -9,12 +9,17 @@ function Start-Menu {
         call, so going Back simply returns from that call.
     .PARAMETER Path
         Path to the root menu.yaml file. Defaults to 'menu.yaml' in the current directory.
-    .PARAMETER SettingsPath
-        Optional path to a JSON settings file. Any {{key}} tokens in the YAML are
-        replaced with values from this file before parsing.
+    .PARAMETER VarsPath
+        Optional path to a vars.yaml file. Must have a top-level 'vars' map. Any
+        {{key}} tokens in the YAML are replaced with matching values before parsing.
+        Defaults to vars.yaml in the same directory as menu.yaml if that file exists.
+    .PARAMETER Context
+        Optional hashtable of runtime values merged over vars.yaml. Context wins on
+        any key conflict. Use for values only known at launch time: current user,
+        session tokens, live environment variable values.
     .EXAMPLE
         Start-Menu
-        # Looks for ./menu.yaml in the current directory
+        # Looks for ./menu.yaml in the current directory, auto-discovers ./vars.yaml
     .PARAMETER StatusData
         Optional hashtable of label/value pairs shown in a status bar above the footer.
         Useful for displaying session context such as connected user, environment name, or
@@ -23,7 +28,9 @@ function Start-Menu {
         When set, a stopwatch runs for each action executed and the elapsed time is
         displayed in a bordered box after the action completes.
     .EXAMPLE
-        Start-Menu -Path 'C:\MyApp\menu.yaml' -SettingsPath 'C:\MyApp\settings.json'
+        Start-Menu -Path 'C:\MyApp\menu.yaml' -VarsPath 'C:\MyApp\vars.yaml'
+    .EXAMPLE
+        Start-Menu -VarsPath .\production.vars.yaml -Context @{ currentUser = $env:USERNAME }
     #>
     [CmdletBinding()]
     param(
@@ -31,7 +38,13 @@ function Start-Menu {
         [string]$Path = '.\menu.yaml',
 
         [Parameter()]
-        [string]$SettingsPath,
+        [string]$VarsPath,
+
+        # Runtime key/value pairs merged over vars.yaml for {{key}} token substitution.
+        # Context wins on any key conflict. Use for values only known at launch time:
+        # current username, session tokens, live environment variable values.
+        [Parameter()]
+        [hashtable]$Context,
 
         # Key bindings hashtable. Keys are action names; values are either a
         # [System.ConsoleKey] enum for special keys, a single-char [string] for
@@ -95,8 +108,21 @@ function Start-Menu {
     # -- Parse and validate the menu tree --------------------------------------
     try {
         $readParams = @{ Path = $resolvedPath }
-        if (-not [string]::IsNullOrWhiteSpace($SettingsPath)) {
-            $readParams['SettingsPath'] = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($SettingsPath)
+        # Resolve VarsPath: explicit parameter takes priority; otherwise auto-discover
+        # vars.yaml sitting next to menu.yaml (the common case requires no parameter).
+        if (-not [string]::IsNullOrWhiteSpace($VarsPath)) {
+            $readParams['VarsPath'] = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($VarsPath)
+        }
+        else {
+            $autoVars = [System.IO.Path]::Combine(
+                [System.IO.Path]::GetDirectoryName($resolvedPath), 'vars.yaml'
+            )
+            if (Test-Path -LiteralPath $autoVars) {
+                $readParams['VarsPath'] = $autoVars
+            }
+        }
+        if ($null -ne $Context) {
+            $readParams['Context'] = $Context
         }
         $menuData = Read-MenuFile @readParams
     }
