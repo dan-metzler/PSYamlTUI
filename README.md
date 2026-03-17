@@ -17,7 +17,7 @@
 
 ---
 
-![PSYamlTUI Demo](Docs/Assets/demo.gif)
+![PSYamlTUI Demo](Docs/Assets/demoloop.gif)
 
 > A demo GIF will live here. Imagine something beautiful.
 
