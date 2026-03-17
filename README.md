@@ -105,14 +105,14 @@ You can find ready-to-run examples in [`Docs/Examples/MenuLaunchers/`](Docs/Exam
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `-Path` | string | `.\menu.yaml` | Path to the root YAML menu file |
-| `-VarsPath` | string | auto-discovers `.\vars.yaml` next to the menu when present | Path to a YAML vars file with top-level `vars:` map for `{{key}}` token substitution |
-| `-Context` | hashtable | none | Runtime values merged over vars file values for token substitution |
-| `-BorderStyle` | string | `Single` | Border style: `Single`, `Double`, `Rounded`, `Heavy`, `ASCII` |
-| `-KeyBindings` | hashtable | see Navigation | Custom key map - remap any action |
-| `-Theme` | hashtable | built-in default theme values | Theme overrides as a hashtable of ConsoleColor names |
-| `-ThemePath` | string | none | Path to a YAML or JSON theme file; accepts flat theme mappings or top-level `theme:` mappings |
-| `-StatusData` | hashtable | none | Key/value pairs displayed in the status bar above the footer |
+| `-Path` | string | `.\menu.yaml` | Root menu YAML path |
+| `-VarsPath` | string | auto `.\vars.yaml` | Vars YAML path (`vars:` map) |
+| `-Context` | hashtable | none | Runtime token values (wins over vars) |
+| `-BorderStyle` | string | `Single` | `Single`, `Double`, `Rounded`, `Heavy`, `ASCII` |
+| `-KeyBindings` | hashtable | defaults | Key map for Up/Down/Select/Back/Quit/Home |
+| `-Theme` | hashtable | defaults | Theme overrides as ConsoleColor values |
+| `-ThemePath` | string | none | YAML/JSON theme file path |
+| `-StatusData` | hashtable | none | Status bar key/value pairs |
 | `-Timer` | switch | off | Shows elapsed execution time after leaf actions |
 
 ---
