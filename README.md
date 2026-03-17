@@ -2,6 +2,8 @@
 
 > Terminal menus that don't make you want to quit. (Unless you press Q.)
 
+PSYamlTUI turns a simple YAML file into a fully navigable terminal UI - recursive submenus, automatic terminal detection, and safe script execution included.
+
 | Build | Gallery | Downloads | License | PowerShell |
 |-------|---------|-----------|---------|------------|
 | [![build][]][build-site] | [![psgallery][]][ps-site] | [![downloads][]][ps-site] | [![license][]][license-link] | [![ps-version][]][ps-site] |
