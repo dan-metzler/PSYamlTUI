@@ -29,11 +29,18 @@ jobs:
         shell: pwsh
         run: .\Install-Requirements.ps1
 
-      - name: Run full build
+      - name: Run full build (capture log)
         shell: pwsh
         run: |
           $version = "${{ github.ref_name }}".TrimStart('v')
-          Invoke-Build -File .\.build.ps1 -Type Full -Version $version
+          Invoke-Build -File .\.build.ps1 -Type Full -Version $version 2>&1 | Tee-Object -FilePath .\build-output.txt
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: .\build-output.txt
 
       - name: Zip output
         shell: pwsh
