@@ -9,6 +9,18 @@ function Read-ConsoleKey {
     return [Console]::ReadKey($true)
 }
 
+function Clear-ConsoleSafe {
+    [CmdletBinding()]
+    param()
+
+    try {
+        [Console]::Clear()
+    }
+    catch {
+        # Non-interactive host (for example CI) can throw invalid handle.
+    }
+}
+
 function Show-MenuFrame {
     <#
     .SYNOPSIS
@@ -123,7 +135,7 @@ function Show-MenuFrame {
                             if ($hookResult -eq $false) { $branchProceeds = $false }
                         }
                         catch {
-                            [Console]::Clear()
+                            Clear-ConsoleSafe
                             Write-Host ''
                             Write-Host "  Hook error: $_" -ForegroundColor Red
                             Write-Host ''
@@ -163,7 +175,7 @@ function Show-MenuFrame {
                             if ($hookResult -eq $false) { $proceed = $false }
                         }
                         catch {
-                            [Console]::Clear()
+                            Clear-ConsoleSafe
                             Write-Host ''
                             Write-Host "  Hook error: $_" -ForegroundColor Red
                             Write-Host ''
@@ -174,7 +186,7 @@ function Show-MenuFrame {
                     }
 
                     if ($proceed -and $sel.Confirm) {
-                        [Console]::Clear()
+                        Clear-ConsoleSafe
                         Write-Host ''
                         Write-Host "  Confirm: $($sel.Label)" -ForegroundColor $Theme.ItemSelected
                         if ($null -ne $sel.Description) {
@@ -188,7 +200,7 @@ function Show-MenuFrame {
                     }
 
                     if ($proceed) {
-                        [Console]::Clear()
+                        Clear-ConsoleSafe
                         Write-BorderedText -TextContent "Running: $($sel.Label)" -TextColor $Theme.Title -BorderColor $Theme.Border -Chars $Chars
                         Write-Host ''
 
@@ -388,7 +400,7 @@ function Write-MenuFrame {
 
     $footerText = Get-FooterText -Bindings $KeyBindings
 
-    [Console]::Clear()
+    Clear-ConsoleSafe
 
     if ($TermProfile.UseAnsi) {
         # Tier 3: build complete ANSI frame string, write in one call
@@ -763,7 +775,7 @@ function Write-BorderedText {
     .DESCRIPTION
         Draws a top border, a content line, and a bottom border using the same character
         set as the menu frame. Colors are sourced from the active theme. Intended to be
-        called immediately after [Console]::Clear() in the leaf-node execution block so
+        called immediately after Clear-ConsoleSafe in the leaf-node execution block so
         the user can see which action is running before any script output appears.
     .PARAMETER TextContent
         The text to display inside the box (e.g. "Running: My-Script").
