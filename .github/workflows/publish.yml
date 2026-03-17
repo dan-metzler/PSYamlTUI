@@ -13,6 +13,7 @@ jobs:
     runs-on: windows-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      PSGALLERY_API_KEY: ${{ secrets.PSGALLERY_API_KEY }}
 
     steps:
       - name: Checkout
@@ -58,10 +59,8 @@ jobs:
           files: PSYamlTUI-${{ github.ref_name }}.zip
 
       - name: Publish to PowerShell Gallery
-        if: ${{ success() && secrets.PSGALLERY_API_KEY != '' }}
+        if: ${{ success() && env.PSGALLERY_API_KEY != '' }}
         shell: pwsh
-        env:
-          PSGALLERY_API_KEY: ${{ secrets.PSGALLERY_API_KEY }}
         run: |
           Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
           Publish-Module -Path .\Output\PSYamlTUI -NuGetApiKey $env:PSGALLERY_API_KEY -ErrorAction Stop
