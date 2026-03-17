@@ -57,7 +57,11 @@ jobs:
           generate_release_notes: true
           files: PSYamlTUI-${{ github.ref_name }}.zip
 
-      # - name: Publish to PowerShell Gallery
-      #   shell: pwsh
-      #   run: |
-      #     Publish-Module -Path .\Output\PSYamlTUI -NuGetApiKey ${{ secrets.PSGALLERY_API_KEY }}
+      - name: Publish to PowerShell Gallery
+        if: ${{ success() && secrets.PSGALLERY_API_KEY != '' }}
+        shell: pwsh
+        env:
+          PSGALLERY_API_KEY: ${{ secrets.PSGALLERY_API_KEY }}
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Publish-Module -Path .\Output\PSYamlTUI -NuGetApiKey $env:PSGALLERY_API_KEY -ErrorAction Stop
