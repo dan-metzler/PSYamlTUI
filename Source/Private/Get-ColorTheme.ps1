@@ -21,26 +21,20 @@ function Get-ColorTheme {
         Get-ColorTheme -Theme @{ Border = 'DarkBlue'; ItemSelected = 'Green' }
         # Returns Default theme with Border and ItemSelected overridden.
     #>
-    [CmdletBinding()]
+    [CmdletBinding(DefaultParameterSetName = 'ThemeHashtable')]
     [OutputType([hashtable])]
     param(
-        [Parameter()]
-        [hashtable]$Theme
+        [Parameter(ParameterSetName = 'ThemeHashtable')]
+        [hashtable]$Theme,
+
+        [Parameter(ParameterSetName = 'ThemeFile')]
+        [string]$ThemePath
     )
 
-    # Default theme -- these values reproduce the built-in look exactly.
-    # ItemDefault = '' means "no explicit color" (terminal's default foreground).
-    $defaults = @{
-        Border          = 'DarkCyan'
-        Title           = 'White'
-        Breadcrumb      = 'DarkGray'
-        ItemDefault     = ''
-        ItemSelected    = 'Yellow'
-        ItemHotkey      = 'DarkGray'
-        ItemDescription = 'DarkGray'
-        StatusLabel     = 'DarkGray'
-        StatusValue     = 'Cyan'
-        FooterText      = 'DarkGray'
+    $defaults = Get-DefaultColorTheme
+
+    if ($PSCmdlet.ParameterSetName -eq 'ThemeFile') {
+        $Theme = Read-ColorThemeFile -ThemePath $ThemePath
     }
 
     if ($null -eq $Theme -or $Theme.Count -eq 0) {
@@ -54,6 +48,12 @@ function Get-ColorTheme {
             $validKeyList = ($defaults.Keys | Sort-Object) -join ', '
             throw "Theme: '$key' is not a recognised theme key. Valid keys: $validKeyList"
         }
+
+        if ($Theme[$key] -is [System.Collections.IDictionary] -or
+            (($Theme[$key] -is [System.Collections.IEnumerable]) -and -not ($Theme[$key] -is [string]))) {
+            throw "Theme: '$key' must be a scalar ConsoleColor name, not a nested object or array."
+        }
+
         $val = [string]$Theme[$key]
         # Empty string is allowed for ItemDefault (means terminal default foreground).
         if (-not [string]::IsNullOrEmpty($val) -and $validColors -notcontains $val) {
@@ -68,4 +68,124 @@ function Get-ColorTheme {
     }
 
     return $resolved
+}
+
+function Get-DefaultColorTheme {
+    [CmdletBinding()]
+    [OutputType([hashtable])]
+    param()
+
+    return @{
+        Border          = 'DarkCyan'
+        Title           = 'White'
+        Breadcrumb      = 'DarkGray'
+        ItemDefault     = ''
+        ItemSelected    = 'Yellow'
+        ItemHotkey      = 'DarkGray'
+        ItemDescription = 'DarkGray'
+        StatusLabel     = 'DarkGray'
+        StatusValue     = 'Cyan'
+        FooterText      = 'DarkGray'
+    }
+}
+
+function Read-ColorThemeFile {
+    [CmdletBinding()]
+    [OutputType([hashtable])]
+    param(
+        [Parameter(Mandatory)]
+        [string]$ThemePath
+    )
+
+    $resolvedThemePath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ThemePath)
+    if (-not (Test-Path -LiteralPath $resolvedThemePath -PathType Leaf)) {
+        throw "Theme file not found: $resolvedThemePath"
+    }
+
+    $extension = [System.IO.Path]::GetExtension($resolvedThemePath).ToLowerInvariant()
+    $content = Get-Content -LiteralPath $resolvedThemePath -Raw -Encoding UTF8
+
+    switch ($extension) {
+        '.yaml' {
+            try {
+                $rawTheme = ConvertFrom-YamlText -Content $content
+            }
+            catch {
+                throw "Theme file '$resolvedThemePath' could not be parsed as YAML: $($_.Exception.Message)"
+            }
+        }
+        '.yml' {
+            try {
+                $rawTheme = ConvertFrom-YamlText -Content $content
+            }
+            catch {
+                throw "Theme file '$resolvedThemePath' could not be parsed as YAML: $($_.Exception.Message)"
+            }
+        }
+        '.json' {
+            try {
+                $rawTheme = ConvertTo-ThemeHashtable -InputObject (ConvertFrom-Json -InputObject $content -ErrorAction Stop)
+            }
+            catch {
+                throw "Theme file '$resolvedThemePath' could not be parsed as JSON: $($_.Exception.Message)"
+            }
+        }
+        default {
+            throw "Theme file '$resolvedThemePath' must use .yaml, .yml, or .json extension."
+        }
+    }
+
+    if (-not ($rawTheme -is [hashtable])) {
+        throw "Theme file '$resolvedThemePath' must deserialize to a mapping of theme keys."
+    }
+
+    $themeData = $rawTheme
+    if ($rawTheme.ContainsKey('theme')) {
+        $themeData = $rawTheme['theme']
+    }
+
+    if (-not ($themeData -is [hashtable])) {
+        throw "Theme file '$resolvedThemePath' must contain a top-level 'theme' mapping or a flat mapping of theme keys."
+    }
+
+    return $themeData
+}
+
+function ConvertTo-ThemeHashtable {
+    [CmdletBinding()]
+    param($InputObject)
+
+    if ($null -eq $InputObject) {
+        return $null
+    }
+
+    if ($InputObject -is [hashtable]) {
+        $copy = @{}
+        foreach ($key in $InputObject.Keys) {
+            $copy[[string]$key] = ConvertTo-ThemeHashtable -InputObject $InputObject[$key]
+        }
+        return $copy
+    }
+
+    if ($InputObject -is [System.Collections.IDictionary]) {
+        $copy = @{}
+        foreach ($key in $InputObject.Keys) {
+            $copy[[string]$key] = ConvertTo-ThemeHashtable -InputObject $InputObject[$key]
+        }
+        return $copy
+    }
+
+    if ($InputObject -is [pscustomobject]) {
+        $copy = @{}
+        foreach ($prop in $InputObject.PSObject.Properties) {
+            $copy[[string]$prop.Name] = ConvertTo-ThemeHashtable -InputObject $prop.Value
+        }
+        return $copy
+    }
+
+    if (($InputObject -is [System.Collections.IEnumerable]) -and -not ($InputObject -is [string])) {
+        return @($InputObject | ForEach-Object { ConvertTo-ThemeHashtable -InputObject $_ })
+    }
+
+    return $InputObject
 }
