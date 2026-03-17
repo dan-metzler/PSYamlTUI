@@ -195,7 +195,7 @@ switch ($Type) {
     }
     "Full" {
         Write-Verbose "Executing full build pipeline..." -Verbose
-        task . CheckGitStatus, BuildModule, CopyLibFiles, ModuleImport, GenerateMarkdownDocs, RunTests
+        task . BuildModule, CopyLibFiles, ModuleImport, GenerateMarkdownDocs, RunTests
 
     }
     default {
