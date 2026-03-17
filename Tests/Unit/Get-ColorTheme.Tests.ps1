@@ -1,7 +1,8 @@
 #Requires -Version 5.1
 # Import at script level -- this runs during Pester discovery so InModuleScope finds the module.
-$script:_repoRoot   = Split-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -Parent
+$script:_repoRoot = Split-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -Parent
 $script:_modulePath = Join-Path -Path (Join-Path -Path $script:_repoRoot -ChildPath 'Source') -ChildPath 'PSYamlTUI.psd1'
+$global:PSYamlTUI_TestRepoRoot = $script:_repoRoot
 Import-Module -Name $script:_modulePath -Force
 
 AfterAll {
@@ -18,6 +19,8 @@ InModuleScope PSYamlTUI {
                 'ItemDefault', 'ItemSelected', 'ItemHotkey', 'ItemDescription',
                 'StatusLabel', 'StatusValue', 'FooterText'
             )
+            $themeFixtureDir = Join-Path -Path (Join-Path -Path $global:PSYamlTUI_TestRepoRoot -ChildPath 'Tests\Fixtures') -ChildPath 'themes'
+            $partialThemePath = Join-Path -Path $themeFixtureDir -ChildPath 'partial.theme.yaml'
         }
 
         Context 'Default theme' {
@@ -126,7 +129,7 @@ InModuleScope PSYamlTUI {
 
             It 'throws for an unknown theme key' {
                 { Get-ColorTheme -Theme @{ UnknownKey = 'Cyan' } } |
-                    Should -Throw
+                Should -Throw
             }
 
             It 'error message for unknown key includes the unrecognized key name' {
@@ -140,7 +143,7 @@ InModuleScope PSYamlTUI {
 
             It 'throws for an invalid ConsoleColor value' {
                 { Get-ColorTheme -Theme @{ Border = 'NotAValidColor' } } |
-                    Should -Throw
+                Should -Throw
             }
 
             It 'error message for invalid color includes both the key and the invalid value' {
@@ -157,32 +160,129 @@ InModuleScope PSYamlTUI {
                 $validColors = [System.Enum]::GetNames([System.ConsoleColor])
                 # Pick a random valid color -- just verify no throw
                 { Get-ColorTheme -Theme @{ Border = $validColors[0] } } |
-                    Should -Not -Throw
+                Should -Not -Throw
             }
         }
 
-        Context 'named theme support (pending - not yet implemented)' {
+        Context 'theme file loading' {
 
-            # Skipped: named theme string parameter not yet implemented
-            It 'named theme Light returns valid color hashtable' -Skip {}
+            It 'loads a flat YAML theme file path' {
+                $theme = Get-ColorTheme -ThemePath $partialThemePath
+                $theme.Border | Should -Be 'Blue'
+                $theme.Title | Should -Be 'White'
+                $theme.ItemSelected | Should -Be 'Yellow'
+                $theme.Count | Should -Be 10
+            }
 
-            It 'named theme Minimal returns valid color hashtable' -Skip {}
+            It 'loads a YAML theme file with a top-level theme mapping' {
+                $themePath = Join-Path -Path $TestDrive -ChildPath 'wrapped.theme.yaml'
+                @'
+theme:
+  Border: "DarkBlue"
+  StatusValue: "Green"
+'@ | Set-Content -Path $themePath -Encoding UTF8
 
-            It 'named theme Classic returns valid color hashtable' -Skip {}
+                $theme = Get-ColorTheme -ThemePath $themePath
+                $theme.Border | Should -Be 'DarkBlue'
+                $theme.StatusValue | Should -Be 'Green'
+                $theme.Title | Should -Be 'White'
+                $theme.Count | Should -Be 10
+            }
 
-            It 'throws descriptive error for unknown named theme' -Skip {}
-        }
+            It 'loads a JSON theme file path' {
+                $themePath = Join-Path -Path $TestDrive -ChildPath 'custom.theme.json'
+                @'
+{
+  "Border": "DarkGreen",
+  "ItemSelected": "Cyan"
+}
+'@ | Set-Content -Path $themePath -Encoding UTF8
 
-        Context 'YAML file theme loading (pending - not yet implemented)' {
+                $theme = Get-ColorTheme -ThemePath $themePath
+                $theme.Border | Should -Be 'DarkGreen'
+                $theme.ItemSelected | Should -Be 'Cyan'
+                $theme.Title | Should -Be 'White'
+                $theme.Count | Should -Be 10
+            }
 
-            # Skipped: YAML theme file loading not yet implemented
-            It 'loads custom theme from a YAML file path' -Skip {}
+            It 'throws when the theme file does not exist' {
+                $missingPath = Join-Path -Path $TestDrive -ChildPath 'missing.theme.yaml'
+                { Get-ColorTheme -ThemePath $missingPath } | Should -Throw
+            }
 
-            It 'partial YAML theme override falls back to Default for missing keys' -Skip {}
+            It 'error message for missing theme file includes the path' {
+                $missingPath = Join-Path -Path $TestDrive -ChildPath 'missing.theme.yaml'
+                try {
+                    Get-ColorTheme -ThemePath $missingPath
+                }
+                catch {
+                    $_.Exception.Message | Should -Match 'Theme file not found'
+                    $_.Exception.Message | Should -Match 'missing.theme.yaml'
+                }
+            }
 
-            It 'throws descriptive error when theme file does not exist' -Skip {}
+            It 'throws when the file extension is unsupported' {
+                $themePath = Join-Path -Path $TestDrive -ChildPath 'custom.theme.txt'
+                'Border: "Blue"' | Set-Content -Path $themePath -Encoding UTF8
+                { Get-ColorTheme -ThemePath $themePath } | Should -Throw
+            }
 
-            It 'throws descriptive error when theme file contains invalid ConsoleColor value' -Skip {}
+            It 'throws when a YAML theme file cannot be parsed' {
+                $themePath = Join-Path -Path $TestDrive -ChildPath 'broken.theme.yaml'
+                @'
+theme:
+    Border: "Blue"
+    Title: [
+'@ | Set-Content -Path $themePath -Encoding UTF8
+                { Get-ColorTheme -ThemePath $themePath } | Should -Throw
+            }
+
+            It 'throws when a JSON theme file cannot be parsed' {
+                $themePath = Join-Path -Path $TestDrive -ChildPath 'broken.theme.json'
+                '{ "Border": "Blue", ' | Set-Content -Path $themePath -Encoding UTF8
+                { Get-ColorTheme -ThemePath $themePath } | Should -Throw
+            }
+
+            It 'throws when theme root is not a mapping' {
+                $themePath = Join-Path -Path $TestDrive -ChildPath 'list.theme.yaml'
+                @'
+- "Blue"
+'@ | Set-Content -Path $themePath -Encoding UTF8
+
+                { Get-ColorTheme -ThemePath $themePath } | Should -Throw
+            }
+
+            It 'throws when top-level theme key is not a mapping' {
+                $themePath = Join-Path -Path $TestDrive -ChildPath 'bad-wrapped.theme.yaml'
+                @'
+theme: "Blue"
+'@ | Set-Content -Path $themePath -Encoding UTF8
+
+                { Get-ColorTheme -ThemePath $themePath } | Should -Throw
+            }
+
+            It 'throws when a theme file contains an invalid color value' {
+                $themePath = Join-Path -Path $TestDrive -ChildPath 'invalid-color.theme.yaml'
+                @'
+Border: "PurpleGreen"
+'@ | Set-Content -Path $themePath -Encoding UTF8
+
+                { Get-ColorTheme -ThemePath $themePath } | Should -Throw
+            }
+
+            It 'throws when a theme file contains a nested object for a color key' {
+                $themePath = Join-Path -Path $TestDrive -ChildPath 'nested.theme.yaml'
+                @'
+Border:
+  Name: "Blue"
+'@ | Set-Content -Path $themePath -Encoding UTF8
+
+                { Get-ColorTheme -ThemePath $themePath } | Should -Throw
+            }
+
+            It 'throws when Theme and ThemePath are passed together' {
+                { Get-ColorTheme -Theme @{ Border = 'Blue' } -ThemePath $partialThemePath } | Should -Throw
+            }
         }
     }
 }
