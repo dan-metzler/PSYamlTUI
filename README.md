@@ -192,7 +192,7 @@ All keys are remappable via the `-KeyBindings` parameter -- see the Quick Start 
 
 ## Themes
 
-![PSYamlTUI Demo](Docs/Assets/themes.gif)
+![PSYamlTUI Demo](Docs/Assets/themesloop.gif)
 
 PSYamlTUI always starts from its built-in default theme values. You can either pass a hashtable to `-Theme` or pass a YAML/JSON file to `-ThemePath`.
 
