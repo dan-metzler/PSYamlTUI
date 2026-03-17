@@ -1,0 +1,32 @@
+items:
+  - label: "Regional Report"
+    description: "Get report data for {{region}}"
+    hotkey: "G"
+    before:
+      hook: "Test-ExampleSession"
+      params:
+        Environment: "{{environment}}"
+        Region: "{{region}}"
+    call: "{{scriptsPath}}/Get-ExampleRegionReport.ps1"
+    params:
+      Environment: "{{environment}}"
+      Region: "{{region}}"
+
+  - label: "User Audit"
+    description: "Summarize user state for {{environment}}"
+    hotkey: "U"
+    before:
+      - hook: "Test-ExampleRole"
+        params:
+          RequiredRole: "Reader"
+          CurrentUser: "{{currentUser}}"
+      - hook: "Test-ExampleSession"
+        params:
+          Environment: "{{environment}}"
+          Region: "{{region}}"
+    call: "{{scriptsPath}}/Get-ExampleUserAudit.ps1"
+    params:
+      Environment: "{{environment}}"
+      Region: "{{region}}"
+      IncludeDisabled: false
+      RequestedBy: "{{currentUser}}"

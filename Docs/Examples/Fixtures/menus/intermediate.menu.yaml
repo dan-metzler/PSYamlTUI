@@ -1,0 +1,35 @@
+menu:
+  title: "Intermediate Operations Menu"
+  items:
+    - label: "System Tasks"
+      description: "Common read-only system checks"
+      children:
+        - label: "Show System Summary"
+          call: "./scripts/Get-ExampleSystemSummary.ps1"
+          params:
+            Environment: "production"
+            Region: "us-east-1"
+
+        - label: "Preview Temp Cleanup"
+          call: "./scripts/Invoke-ExampleCleanupPreview.ps1"
+          params:
+            Path: "%TEMP%"
+            MaxItems: 10
+
+    - label: "Service Tasks"
+      description: "Service checks with no changes"
+      children:
+        - label: "Check Print Spooler"
+          call: "./scripts/Invoke-ExampleServiceCheck.ps1"
+          params:
+            ServiceName: "Spooler"
+            Environment: "production"
+
+        - label: "Check Time Service"
+          call: "./scripts/Invoke-ExampleServiceCheck.ps1"
+          params:
+            ServiceName: "W32Time"
+            Environment: "production"
+
+    - label: "Exit"
+      exit: true
