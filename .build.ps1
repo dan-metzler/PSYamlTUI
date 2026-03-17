@@ -129,6 +129,7 @@ task ModuleImport BuildModule, CopyLibFiles, {
         throw "Module name is missing in the .psd1 file."
     }
 
+    Remove-Module -Name $script:moduleName -Force -ErrorAction SilentlyContinue
     Import-Module -Name $getPsdFile.FullName -Force -ErrorAction Stop
     Write-Verbose "Imported module: $script:moduleName" -Verbose
 }
