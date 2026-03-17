@@ -57,7 +57,13 @@ function Invoke-BeforeHook {
 
         # Clear before each hook so inline prompts (credentials, confirmations, input)
         # appear on a clean screen rather than over the rendered menu frame.
-        [Console]::Clear()
+        # Some CI hosts do not provide a valid interactive console handle.
+        try {
+            [Console]::Clear()
+        }
+        catch {
+            # Non-interactive host (for example GitHub Actions) -- continue without clearing.
+        }
 
         $hookResult = & $cmd @splatParams
 

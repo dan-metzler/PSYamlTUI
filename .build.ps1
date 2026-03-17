@@ -174,7 +174,10 @@ task RunTests ModuleImport, {
     Get-Module -Name PSYamlTUI -All | Remove-Module -Force -ErrorAction SilentlyContinue
 
     $config = New-PesterConfiguration
-    $config.Run.Path = "$PSScriptRoot\Tests"
+    $config.Run.Path = @(
+        (Join-Path -Path $PSScriptRoot -ChildPath 'Tests\Unit'),
+        (Join-Path -Path $PSScriptRoot -ChildPath 'Tests\Integration')
+    )
     $config.Run.Exit = $true
     $config.Output.Verbosity = 'Detailed'
 
