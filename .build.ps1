@@ -52,14 +52,14 @@ task CheckGitStatus {
 }
 
 task BuildModule {
-    $ok = & "$PSScriptRoot\Source\ModuleBuilder.ps1"
+    $ok = & "$PSScriptRoot\Source\ModuleBuilder.ps1" -Version $Version
     if (-Not($ok)) { throw "ModuleBuilder.ps1 failed" }
 }
 
 # ============================================================================
 # Task: CopyLibFiles
 # ============================================================================
-# ModuleBuilder only inlines .ps1 files — it does not copy bundled binaries.
+# ModuleBuilder only inlines .ps1 files - it does not copy bundled binaries.
 # This task copies Source/lib/ (YamlDotNet.dll etc.) into the built output
 # so the compiled module can load its dependencies at runtime.
 
@@ -162,9 +162,15 @@ task GenerateMarkdownDocs ModuleImport, {
 # Discovers and runs all .Tests.ps1 files in the Tests directory.
 # Validates module functionality, command exports, and parameter sets.
 
-task RunTests {
+task RunTests ModuleImport, {
     Import-Module Pester -ErrorAction Stop
-    Invoke-Pester -Script "$PSScriptRoot\Tests"
+
+    $config = New-PesterConfiguration
+    $config.Run.Path = "$PSScriptRoot\Tests"
+    $config.Run.Exit = $true
+    $config.Output.Verbosity = 'Detailed'
+
+    Invoke-Pester -Configuration $config
 }
 
 
@@ -177,9 +183,10 @@ task RunTests {
 # Execution sequence:
 #   1. CheckGitStatus        - Ensure build branch is 'main'
 #   2. BuildModule           - Compile and package the module
-#   3. ModuleImport          - Validate and import module artifact
-#   4. GenerateMarkdownDocs  - Create function documentation (depends on ModuleImport)
-#   5. RunTests              - Verify module functionality via Pester
+#   3. CopyLibFiles          - Copy required library files to the output directory
+#   4. ModuleImport          - Validate and import module artifact
+#   5. GenerateMarkdownDocs  - Create function documentation (depends on ModuleImport)
+#   6. RunTests              - Verify module functionality via Pester
 
 switch ($Type) {
     "Local" {
@@ -188,7 +195,7 @@ switch ($Type) {
     }
     "Full" {
         Write-Verbose "Executing full build pipeline..." -Verbose
-        task . CheckGitStatus, CopyLibFiles, BuildModule, ModuleImport, GenerateMarkdownDocs, RunTests
+        task . CheckGitStatus, BuildModule, CopyLibFiles, ModuleImport, GenerateMarkdownDocs, RunTests
 
     }
     default {
