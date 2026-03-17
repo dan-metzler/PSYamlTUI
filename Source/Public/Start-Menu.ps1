@@ -17,6 +17,12 @@ function Start-Menu {
         Optional hashtable of runtime values merged over vars.yaml. Context wins on
         any key conflict. Use for values only known at launch time: current user,
         session tokens, live environment variable values.
+    .PARAMETER Theme
+        Optional theme override hashtable. Any omitted keys fall back to the built-in
+        default theme values.
+    .PARAMETER ThemePath
+        Optional path to a YAML or JSON theme file. The file may be a flat mapping of
+        theme keys or contain a top-level 'theme' map.
     .EXAMPLE
         Start-Menu
         # Looks for ./menu.yaml in the current directory, auto-discovers ./vars.yaml
@@ -31,8 +37,10 @@ function Start-Menu {
         Start-Menu -Path 'C:\MyApp\menu.yaml' -VarsPath 'C:\MyApp\vars.yaml'
     .EXAMPLE
         Start-Menu -VarsPath .\production.vars.yaml -Context @{ currentUser = $env:USERNAME }
+    .EXAMPLE
+        Start-Menu -Path .\menu.yaml -ThemePath .\theme.yaml
     #>
-    [CmdletBinding()]
+    [CmdletBinding(DefaultParameterSetName = 'ThemeHashtable')]
     param(
         [Parameter()]
         [string]$Path = '.\menu.yaml',
@@ -71,8 +79,14 @@ function Start-Menu {
         # ItemHotkey, ItemDescription, StatusLabel, StatusValue, FooterText.
         # All values must be ConsoleColor names (e.g. 'Cyan') or '' for terminal default.
         # Pass $null or omit entirely to use the Default theme.
-        [Parameter()]
+        [Parameter(ParameterSetName = 'ThemeHashtable')]
         [hashtable]$Theme,
+
+        # Path to a YAML or JSON theme file. The file may be a flat mapping of theme
+        # keys or contain a top-level 'theme' mapping. Internally loaded and merged
+        # over the built-in defaults.
+        [Parameter(ParameterSetName = 'ThemeFile')]
+        [string]$ThemePath,
 
         # Optional key/value pairs displayed in a status bar above the footer.
         # Evaluated once at Start-Menu call time; values are never executed or parsed.
@@ -98,7 +112,13 @@ function Start-Menu {
     # Cached in module scope so Show-MenuFrame sub-calls reuse the same profile
     $script:YamlTUI_TermProfile = Get-TerminalProfile
     $script:YamlTUI_CharSet = Get-CharacterSet -TerminalProfile $script:YamlTUI_TermProfile -Style $BorderStyle
-    $script:YamlTUI_Theme = Get-ColorTheme -Theme $Theme
+    if (-not [string]::IsNullOrWhiteSpace($ThemePath)) {
+        $resolvedThemePath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ThemePath)
+        $script:YamlTUI_Theme = Get-ColorTheme -ThemePath $resolvedThemePath
+    }
+    else {
+        $script:YamlTUI_Theme = Get-ColorTheme -Theme $Theme
+    }
 
     # -- Navigation signal flags ------------------------------------------------
     # These propagate Quit and Home events up through the recursion tree
