@@ -13,6 +13,18 @@ $currentUser = ($identityName -split '\\')[-1]
 $statusData = @{
     'Connected As' = $currentUser
     'Environment'  = 'Production'
+    'Region'       = 'us-east-1'
 }
 
-Start-Menu -Path $menuPath -StatusData $statusData -ThemePath $themePath -BorderStyle Rounded
+# Arrow keys: Left = Back one level, Right = Enter/Select
+$keyBindings = @{
+    Up     = [System.ConsoleKey]::UpArrow
+    Down   = [System.ConsoleKey]::DownArrow
+    Select = @([System.ConsoleKey]::Enter, [System.ConsoleKey]::RightArrow)
+    Back   = @([System.ConsoleKey]::Escape, [System.ConsoleKey]::LeftArrow)
+    Quit   = 'Q'
+    Home   = 'H'
+}
+
+Start-Menu -Path $menuPath -StatusData $statusData -ThemePath $themePath -BorderStyle Rounded `
+    -KeyBindings $keyBindings -Context @{ currentUser = $currentUser }
