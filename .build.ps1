@@ -118,17 +118,19 @@ if (Test-Path -LiteralPath $_yt_lib) {
 
 task ModuleImport BuildModule, CopyLibFiles, {
     $getPsdFile = Get-ChildItem -Path "$PSScriptRoot\Output\*.psd1" -Recurse | Select-Object -First 1
-    
-    if (-not($getPsdFile)) {
+
+    if (-not $getPsdFile) {
         throw "No .psd1 file found in the Output directory."
     }
 
     $script:moduleName = [System.IO.Path]::GetFileNameWithoutExtension($getPsdFile.Name)
 
-
     if ([string]::IsNullOrEmpty($script:moduleName)) {
         throw "Module name is missing in the .psd1 file."
     }
+
+    Import-Module -Name $getPsdFile.FullName -Force -ErrorAction Stop
+    Write-Verbose "Imported module: $script:moduleName" -Verbose
 }
 
 # ============================================================================
@@ -195,7 +197,7 @@ switch ($Type) {
     }
     "Full" {
         Write-Verbose "Executing full build pipeline..." -Verbose
-        task . BuildModule, CopyLibFiles, ModuleImport, GenerateMarkdownDocs, RunTests
+        task . BuildModule, CopyLibFiles, ModuleImport, RunTests
 
     }
     default {
