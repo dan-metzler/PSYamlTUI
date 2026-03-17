@@ -4,7 +4,7 @@ $moduleManifest = Join-Path -Path $repoRoot -ChildPath 'Source\PSYamlTUI.psd1'
 $fixturesRoot = Join-Path (Join-Path $here '..') 'Fixtures'
 $menuPath = Join-Path -Path $fixturesRoot -ChildPath 'menus\advanced.menu.yaml'
 $varsPath = Join-Path -Path $fixturesRoot -ChildPath 'vars\advanced.var.yaml'
-$themePath = Join-Path -Path $fixturesRoot -ChildPath 'themes\advanced.theme.json'
+$themePath = Join-Path -Path $fixturesRoot -ChildPath 'themes\advanced.theme.yaml'
 $hooksPath = Join-Path (Join-Path $here '..') 'Scripts\Register-ExampleHooks.ps1'
 
 Import-Module -Name $moduleManifest -Force
@@ -17,12 +17,6 @@ $statusData = @{
     'Connected As' = $currentUser
     'Environment'  = 'Production'
     'Region'       = 'us-east-1'
-}
-
-$themeObject = Get-Content -Path $themePath -Raw | ConvertFrom-Json
-$theme = @{}
-$themeObject.PSObject.Properties | ForEach-Object {
-    $theme[$_.Name] = [string]$_.Value
 }
 
 $keyBindings = @{
@@ -39,7 +33,7 @@ $context = @{
 }
 
 try {
-    Start-Menu -Path $menuPath -VarsPath $varsPath -Context $context -StatusData $statusData -Theme $theme -BorderStyle Rounded -KeyBindings $keyBindings -Timer
+    Start-Menu -Path $menuPath -VarsPath $varsPath -Context $context -StatusData $statusData -ThemePath $themePath -BorderStyle Rounded -KeyBindings $keyBindings -Timer
 }
 finally {
     if (Get-Command -Name 'Unregister-ExampleHooks' -CommandType Function -ErrorAction SilentlyContinue) {
