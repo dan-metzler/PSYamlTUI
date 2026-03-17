@@ -1,0 +1,59 @@
+items:
+  - label: "Deploy {{appName}}"
+    description: "Generate a deployment plan for {{environment}}"
+    hotkey: "D"
+    before:
+      - hook: "Test-ExampleRole"
+        params:
+          RequiredRole: "Operator"
+          CurrentUser: "{{currentUser}}"
+      - hook: "Test-ExampleChangeWindow"
+        params:
+          Environment: "{{environment}}"
+          Region: "{{region}}"
+    confirm: true
+    call: "{{scriptsPath}}/Get-ExampleDeploymentPlan.ps1"
+    params:
+      AppName: "{{appName}}"
+      Environment: "{{environment}}"
+      Region: "{{region}}"
+      RequestedBy: "{{currentUser}}"
+
+  - label: "Maintenance"
+    description: "Open maintenance actions for {{environment}}"
+    hotkey: "M"
+    before:
+      hook: "Test-ExampleRole"
+      params:
+        RequiredRole: "Operator"
+        CurrentUser: "{{currentUser}}"
+    import: "./advanced.maintenance.menu.yaml"
+
+  # Teaching demo: this node starts with failed auth in the hook, then allows
+  # the user to recover by entering credentials. On success, the action runs.
+  - label: "Auth Recovery Demo - Hook resolves to true"
+    description: "Intentional demo: hook prompts, then allows execution on success"
+    hotkey: "A"
+    before:
+      hook: "Test-ExampleAuthRecovery"
+      params:
+        IsAuthenticated: false
+        UserName: "{{currentUser}}"
+    call: "{{scriptsPath}}/Get-ExampleRegionReport.ps1"
+    params:
+      Environment: "{{environment}}"
+      Region: "{{region}}"
+
+  # Teaching demo: this node is intentionally blocked by a before hook that
+  # returns false. The action should not execute, and the menu returns normally.
+  - label: "Blocked Demo - Hook returns false"
+    description: "Intentional demo: this action is blocked by before hook"
+    hotkey: "B"
+    before:
+      hook: "Test-ExampleBlockedAction"
+      params:
+        Reason: "Demonstrate silent false hook behavior"
+    call: "{{scriptsPath}}/Get-ExampleRegionReport.ps1"
+    params:
+      Environment: "{{environment}}"
+      Region: "{{region}}"

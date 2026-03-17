@@ -1,0 +1,30 @@
+menu:
+  title: "{{appName}} Control - {{environment}}"
+  items:
+    - label: "Platform Operations"
+      description: "Run {{appName}} tasks in {{region}}"
+      hotkey: "P"
+      before:
+        hook: "Test-ExampleSession"
+        params:
+          Environment: "{{environment}}"
+          Region: "{{region}}"
+      import: "./advanced.operations.menu.yaml"
+
+    - label: "Reporting"
+      description: "Open reports for {{environment}}"
+      hotkey: "R"
+      before:
+        - hook: "Test-ExampleSession"
+          params:
+            Environment: "{{environment}}"
+            Region: "{{region}}"
+        - hook: "Test-ExampleRole"
+          params:
+            RequiredRole: "Reader"
+            CurrentUser: "{{currentUser}}"
+      import: "./advanced.reports.menu.yaml"
+
+    - label: "Exit"
+      hotkey: "X"
+      exit: true

@@ -1,0 +1,24 @@
+items:
+  - label: "Database Health Check"
+    description: "Test database health for {{environment}}"
+    before:
+      hook: "Test-ExampleSession"
+      params:
+        Environment: "{{environment}}"
+        Region: "{{region}}"
+    call: "{{scriptsPath}}/Test-ExampleDatabaseHealth.ps1"
+    params:
+      Environment: "{{environment}}"
+      Region: "{{region}}"
+
+  - label: "Service Check"
+    description: "Check a service in {{environment}}"
+    before:
+      hook: "Test-ExampleRole"
+      params:
+        RequiredRole: "Operator"
+        CurrentUser: "{{currentUser}}"
+    call: "{{scriptsPath}}/Invoke-ExampleServiceCheck.ps1"
+    params:
+      ServiceName: "W32Time"
+      Environment: "{{environment}}"

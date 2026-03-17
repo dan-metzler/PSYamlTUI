@@ -1,0 +1,23 @@
+menu:
+  title: "Simple Example Menu"
+  items:
+    - label: "Show System Summary"
+      description: "Display a short system summary"
+      call: "./scripts/Get-ExampleSystemSummary.ps1"
+      params:
+        Environment: "lab"
+        Region: "us-east-1"
+
+    - label: "Check Time Service"
+      description: "Check status of a local service"
+      call: "./scripts/Invoke-ExampleServiceCheck.ps1"
+      params:
+        ServiceName: "W32Time"
+        Environment: "lab"
+
+    - label: "Current Date"
+      description: "Show the current date and time"
+      call: "Get-Date"
+
+    - label: "Exit"
+      exit: true
