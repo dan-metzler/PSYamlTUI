@@ -168,6 +168,11 @@ task GenerateMarkdownDocs ModuleImport, {
 task RunTests ModuleImport, {
     Import-Module Pester -ErrorAction Stop
 
+    # Tests import the Source module in discovery for InModuleScope.
+    # If the compiled module is still loaded from ModuleImport, Pester throws:
+    # "Multiple script or manifest modules named 'PSYamlTUI' are currently loaded."
+    Get-Module -Name PSYamlTUI -All | Remove-Module -Force -ErrorAction SilentlyContinue
+
     $config = New-PesterConfiguration
     $config.Run.Path = "$PSScriptRoot\Tests"
     $config.Run.Exit = $true
