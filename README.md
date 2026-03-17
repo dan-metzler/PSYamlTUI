@@ -8,11 +8,15 @@
 
 [build]:https://github.com/dan-metzler/PSYamlTUI/actions/workflows/publish.yml/badge.svg
 [build-site]:https://github.com/dan-metzler/PSYamlTUI/actions/workflows/publish.yml
+
 [psgallery]:https://img.shields.io/powershellgallery/v/PSYamlTUI.svg
 [ps-site]:https://www.powershellgallery.com/packages/PSYamlTUI
+
 [downloads]:https://img.shields.io/powershellgallery/dt/PSYamlTUI.svg?color=blue
+
 [license]:https://img.shields.io/github/license/dan-metzler/PSYamlTUI.svg
 [license-link]:https://github.com/dan-metzler/PSYamlTUI/blob/main/LICENSE
+
 [ps-version]:https://img.shields.io/badge/powershell-5.1%2B-blue.svg
 
 ---
