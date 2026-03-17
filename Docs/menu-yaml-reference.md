@@ -4,6 +4,7 @@ See also:
 
 - `Docs/root-jail-security.md`
 - `Docs/hook-function-best-practices.md`
+- `Docs/vars-vs-context.md`
 
 ## File Structure
 
@@ -76,6 +77,54 @@ Usage in YAML:
 ```
 
 Unknown tokens are left as-is -- no error thrown.
+
+---
+
+## Quoting Best Practices
+
+Both single quotes and double quotes are valid in YAML values, but they are not equally safe for every use case.
+
+### Recommended rule of thumb
+
+- Use single quotes for `call:` and `import:` values when tokens or backslash-heavy paths may appear
+- Use double quotes for plain display text such as `label:` and `description:`
+
+Why:
+
+- Token substitution happens before YAML parsing
+- Double-quoted YAML treats some backslash sequences as escapes
+- A substituted value containing backslashes can parse differently than intended or fail to parse
+- Single-quoted YAML treats the value more literally
+
+Recommended:
+
+```yaml
+call: '{{scriptsPath}}/Deploy.ps1'
+import: './menus/{{environment}}/reports.yaml'
+```
+
+Usually fine:
+
+```yaml
+label: "Deploy to Production"
+description: "Runs the deployment plan"
+call: "./scripts/Get-Report.ps1"
+call: "Get-Process"
+```
+
+If a tokenized value may contain backslashes, prefer single quotes.
+
+Example:
+
+```yaml
+call: '{{scriptsPath}}/Run-Task.ps1'
+```
+
+This is especially important for path-like values in:
+
+- `call`
+- `import`
+- `params` values that may later be treated as file paths by your scripts
 
 ---
 
