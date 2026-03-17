@@ -1,5 +1,10 @@
 # PSYamlTUI `menu.yaml` Feature Reference
 
+See also:
+
+- `Docs/root-jail-security.md`
+- `Docs/hook-function-best-practices.md`
+
 ## File Structure
 
 ```yaml
