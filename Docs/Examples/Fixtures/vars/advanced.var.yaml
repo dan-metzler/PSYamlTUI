@@ -1,0 +1,5 @@
+vars:
+  appName: "PSYamlTUI"
+  environment: "production"
+  region: "us-east-1"
+  scriptsPath: "./scripts"
