@@ -18,9 +18,11 @@ Each launcher now uses a different theme profile for a clear visual identity:
 
 Theme files:
 
-- Docs/Examples/Fixtures/themes/simple.theme.json
-- Docs/Examples/Fixtures/themes/intermediate.theme.json
-- Docs/Examples/Fixtures/themes/advanced.theme.json
+- Docs/Examples/Fixtures/themes/simple.theme.yaml
+- Docs/Examples/Fixtures/themes/intermediate.theme.yaml
+- Docs/Examples/Fixtures/themes/advanced.theme.yaml
+
+Each launcher now passes its theme file directly through `-ThemePath`.
 
 ## Advanced Hook Behavior Demo
 
