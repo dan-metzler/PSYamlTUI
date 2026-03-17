@@ -37,14 +37,7 @@ jobs:
         shell: pwsh
         run: |
           $version = "${{ github.ref_name }}".TrimStart('v')
-          Invoke-Build -File .\.build.ps1 -Type Full -Version $version 2>&1 | Tee-Object -FilePath .\build-output.txt
-
-      - name: Upload build log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-output
-          path: .\build-output.txt
+          Invoke-Build -File .\.build.ps1 -Type Full -Version $version 2>&1
 
       - name: Zip output
         shell: pwsh
@@ -63,27 +56,4 @@ jobs:
         shell: pwsh
         run: |
           Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-
-          $apiKey = [string]$env:PSGALLERY_API_KEY
-          if ([string]::IsNullOrWhiteSpace($apiKey)) {
-            throw 'PSGALLERY_API_KEY is empty. Check repository secret configuration.'
-          }
-          $apiKey = $apiKey.Trim()
-
-          $moduleManifestPath = '.\Output\PSYamlTUI\PSYamlTUI.psd1'
-          if (-not (Test-Path -LiteralPath $moduleManifestPath)) {
-            throw "Built module manifest was not found at $moduleManifestPath"
-          }
-
-          $manifest = Test-ModuleManifest -Path $moduleManifestPath
-          Write-Host "Preparing to publish module '$($manifest.Name)' version '$($manifest.Version)' to PSGallery."
-
-          $existing = Find-Module -Name $manifest.Name -Repository PSGallery -ErrorAction SilentlyContinue
-          if ($null -ne $existing) {
-            Write-Host "PSGallery currently has version '$($existing.Version)' for '$($existing.Name)'."
-          }
-          else {
-            Write-Host "No existing PSGallery package named '$($manifest.Name)' found."
-          }
-
-          Publish-Module -Path .\Output\PSYamlTUI -NuGetApiKey $apiKey -Verbose -ErrorAction Stop
+          Publish-Module -Path .\Output\PSYamlTUI -NuGetApiKey $env:PSGALLERY_API_KEY -ErrorAction Stop
