@@ -8,10 +8,12 @@ on:
 jobs:
   publish:
     runs-on: windows-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0  # required so git describe can see tags
 
@@ -31,7 +33,7 @@ jobs:
         shell: pwsh
         run: |
           $version = "${{ github.ref_name }}".TrimStart('v')
-          .\\.build.ps1 -Type Full -Version $version
+          Invoke-Build -File .\.build.ps1 -Type Full -Version $version
 
       - name: Zip output
         shell: pwsh
