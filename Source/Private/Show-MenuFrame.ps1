@@ -655,7 +655,7 @@ function Build-HostLines {
         [hashtable]$Theme
     )
 
-    $lines = @()
+    $lines = [System.Collections.Generic.List[hashtable]]::new()
     $cw = $InnerWidth - 2  # content width (minus left/right margins)
 
     # Helper: returns a segment-based bordered line so border glyphs can keep
@@ -685,22 +685,22 @@ function Build-HostLines {
     $cFtr = if ([string]::IsNullOrEmpty($Theme.FooterText)) { $null } else { $Theme.FooterText }
 
     # Top border
-    $lines += @{ Text = (Get-HRule $Chars.TopLeft $Chars.TopRight $InnerWidth $Chars); Color = $cBorder }
+    $lines.Add(@{ Text = (Get-HRule $Chars.TopLeft $Chars.TopRight $InnerWidth $Chars); Color = $cBorder })
 
     # Title
-    $lines += (& $mkLine $Title $cTitle $cw $Chars $cBorder)
+    $lines.Add((& $mkLine $Title $cTitle $cw $Chars $cBorder))
 
     # Breadcrumb
     if ($Breadcrumb -and $Breadcrumb.Count -gt 0) {
         $crumbText = $Breadcrumb -join " $($Chars.Arrow) "
-        $lines += (& $mkLine $crumbText $cCrumb $cw $Chars $cBorder)
+        $lines.Add((& $mkLine $crumbText $cCrumb $cw $Chars $cBorder))
     }
 
     # Separator
-    $lines += @{ Text = (Get-HRule $Chars.LeftT $Chars.RightT $InnerWidth $Chars); Color = $cBorder }
+    $lines.Add(@{ Text = (Get-HRule $Chars.LeftT $Chars.RightT $InnerWidth $Chars); Color = $cBorder })
 
     # Empty line
-    $lines += (& $mkLine '' $null $cw $Chars $cBorder)
+    $lines.Add((& $mkLine '' $null $cw $Chars $cBorder))
 
     # Items
     for ($i = 0; $i -lt $Items.Count; $i++) {
@@ -717,17 +717,17 @@ function Build-HostLines {
         $lineText = "$selector $labelVis$suffixVis"
 
         $color = if ($isSelected) { $cSel } else { $cItem }
-        $lines += (& $mkLine $lineText $color $cw $Chars $cBorder)
+        $lines.Add((& $mkLine $lineText $color $cw $Chars $cBorder))
 
         # Description for selected item
         if ($isSelected -and $null -ne $item.Description) {
             $descText = '   ' + $item.Description
-            $lines += (& $mkLine $descText $cDesc $cw $Chars $cBorder)
+            $lines.Add((& $mkLine $descText $cDesc $cw $Chars $cBorder))
         }
     }
 
     # Empty line
-    $lines += (& $mkLine '' $null $cw $Chars $cBorder)
+    $lines.Add((& $mkLine '' $null $cw $Chars $cBorder))
 
     # Status bar (optional, only when StatusData has at least one entry)
     if ($null -ne $StatusData -and $StatusData.Count -gt 0) {
@@ -740,36 +740,36 @@ function Build-HostLines {
         $maxLblLen = [Math]::Min($maxLblLen, [Math]::Floor($cw / 2))
         $valMaxLen = [Math]::Max(1, $cw - $maxLblLen - 2)
 
-        $lines += @{ Text = (Get-HRule $Chars.LeftT $Chars.RightT $InnerWidth $Chars); Color = $cBorder }
+        $lines.Add(@{ Text = (Get-HRule $Chars.LeftT $Chars.RightT $InnerWidth $Chars); Color = $cBorder })
 
         foreach ($k in $StatusData.Keys) {
             $lblVis = (Get-TruncatedLabel -Text $k -MaxLen $maxLblLen).PadRight($maxLblLen)
             $valVis = Get-TruncatedLabel -Text ([string]$StatusData[$k]) -MaxLen $valMaxLen
             $trailing = ' ' * [Math]::Max(0, $cw - $maxLblLen - 2 - $valVis.Length)
             # Segment-based line: label and value use separate theme colors
-            $lines += @{
-                Segments = @(
-                    @{ Text = "$($Chars.Vertical) "; Color = $cBorder },
-                    @{ Text = $lblVis; Color = $cSlbl },
-                    @{ Text = '  '; Color = $null },
-                    @{ Text = $valVis; Color = $cSval },
-                    @{ Text = "$trailing $($Chars.Vertical)"; Color = $cBorder }
-                )
-            }
+            $lines.Add(@{
+                    Segments = @(
+                        @{ Text = "$($Chars.Vertical) "; Color = $cBorder },
+                        @{ Text = $lblVis; Color = $cSlbl },
+                        @{ Text = '  '; Color = $null },
+                        @{ Text = $valVis; Color = $cSval },
+                        @{ Text = "$trailing $($Chars.Vertical)"; Color = $cBorder }
+                    )
+                })
         }
     }
 
     # Footer separator
-    $lines += @{ Text = (Get-HRule $Chars.LeftT $Chars.RightT $InnerWidth $Chars); Color = $cBorder }
+    $lines.Add(@{ Text = (Get-HRule $Chars.LeftT $Chars.RightT $InnerWidth $Chars); Color = $cBorder })
 
     # Footer
     $footText = $FooterText
-    $lines += (& $mkLine $footText $cFtr $cw $Chars $cBorder)
+    $lines.Add((& $mkLine $footText $cFtr $cw $Chars $cBorder))
 
     # Bottom border
-    $lines += @{ Text = (Get-HRule $Chars.BottomLeft $Chars.BottomRight $InnerWidth $Chars); Color = $cBorder }
+    $lines.Add(@{ Text = (Get-HRule $Chars.BottomLeft $Chars.BottomRight $InnerWidth $Chars); Color = $cBorder })
 
-    return $lines
+    return $lines.ToArray()
 }
 
 # -- Action banner ------------------------------------------------------------

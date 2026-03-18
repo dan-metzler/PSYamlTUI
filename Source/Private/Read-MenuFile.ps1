@@ -191,7 +191,7 @@ function Resolve-MenuItems {
         [hashtable]$Tokens = @{}
     )
 
-    $result = @()
+    $result = [System.Collections.Generic.List[object]]::new()
 
     foreach ($item in $Items) {
         if (-not ($item -is [hashtable])) {
@@ -255,21 +255,21 @@ function Resolve-MenuItems {
                 $importBefore = @(Assert-BeforeHooks -Value $item['before'] -Label $label -LineHint '')
             }
 
-            $result += [PSCustomObject]@{
+            $result.Add([PSCustomObject]@{
                 NodeType    = 'BRANCH'
                 Label       = $label
                 Description = $importDesc
                 Hotkey      = $importHotkey
                 Children    = $resolvedImportedItems
                 Before      = $importBefore
-            }
+            })
         }
         else {
-            $result += Assert-MenuItem -Item $item -RootDir $RootDir -LineMap $LineMap -Tokens $Tokens
+            $result.Add((Assert-MenuItem -Item $item -RootDir $RootDir -LineMap $LineMap -Tokens $Tokens))
         }
     }
 
-    return $result
+    return $result.ToArray()
 }
 
 function Assert-MenuItem {
