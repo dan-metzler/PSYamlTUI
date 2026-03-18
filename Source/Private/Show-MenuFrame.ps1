@@ -658,13 +658,19 @@ function Build-HostLines {
     $lines = @()
     $cw = $InnerWidth - 2  # content width (minus left/right margins)
 
-    # Helper: returns @{Text=; Color=} for a bordered content line.
+    # Helper: returns a segment-based bordered line so border glyphs can keep
+    # the border color even when content uses a different color.
     # $Cw and $CharSet are passed explicitly to avoid PS5.1 scoping issues.
     $mkLine = {
-        param([string]$Text, $Color, [int]$Cw, [hashtable]$CharSet)
+        param([string]$Text, $Color, [int]$Cw, [hashtable]$CharSet, $BorderColor)
         $truncated = Get-TruncatedLabel -Text $Text -MaxLen $Cw
-        $full = "$($CharSet.Vertical) $($truncated.PadRight($Cw)) $($CharSet.Vertical)"
-        @{ Text = $full; Color = $Color }
+        @{
+            Segments = @(
+                @{ Text = "$($CharSet.Vertical) "; Color = $BorderColor }
+                @{ Text = $truncated.PadRight($Cw); Color = $Color }
+                @{ Text = " $($CharSet.Vertical)"; Color = $BorderColor }
+            )
+        }
     }
 
     # Resolve theme colors -- $null means Write-Host uses the terminal default
@@ -682,19 +688,19 @@ function Build-HostLines {
     $lines += @{ Text = (Get-HRule $Chars.TopLeft $Chars.TopRight $InnerWidth $Chars); Color = $cBorder }
 
     # Title
-    $lines += (& $mkLine $Title $cTitle $cw $Chars)
+    $lines += (& $mkLine $Title $cTitle $cw $Chars $cBorder)
 
     # Breadcrumb
     if ($Breadcrumb -and $Breadcrumb.Count -gt 0) {
         $crumbText = $Breadcrumb -join " $($Chars.Arrow) "
-        $lines += (& $mkLine $crumbText $cCrumb $cw $Chars)
+        $lines += (& $mkLine $crumbText $cCrumb $cw $Chars $cBorder)
     }
 
     # Separator
     $lines += @{ Text = (Get-HRule $Chars.LeftT $Chars.RightT $InnerWidth $Chars); Color = $cBorder }
 
     # Empty line
-    $lines += (& $mkLine '' $null $cw $Chars)
+    $lines += (& $mkLine '' $null $cw $Chars $cBorder)
 
     # Items
     for ($i = 0; $i -lt $Items.Count; $i++) {
@@ -711,17 +717,17 @@ function Build-HostLines {
         $lineText = "$selector $labelVis$suffixVis"
 
         $color = if ($isSelected) { $cSel } else { $cItem }
-        $lines += (& $mkLine $lineText $color $cw $Chars)
+        $lines += (& $mkLine $lineText $color $cw $Chars $cBorder)
 
         # Description for selected item
         if ($isSelected -and $null -ne $item.Description) {
             $descText = '   ' + $item.Description
-            $lines += (& $mkLine $descText $cDesc $cw $Chars)
+            $lines += (& $mkLine $descText $cDesc $cw $Chars $cBorder)
         }
     }
 
     # Empty line
-    $lines += (& $mkLine '' $null $cw $Chars)
+    $lines += (& $mkLine '' $null $cw $Chars $cBorder)
 
     # Status bar (optional, only when StatusData has at least one entry)
     if ($null -ne $StatusData -and $StatusData.Count -gt 0) {
@@ -758,7 +764,7 @@ function Build-HostLines {
 
     # Footer
     $footText = $FooterText
-    $lines += (& $mkLine $footText $cFtr $cw $Chars)
+    $lines += (& $mkLine $footText $cFtr $cw $Chars $cBorder)
 
     # Bottom border
     $lines += @{ Text = (Get-HRule $Chars.BottomLeft $Chars.BottomRight $InnerWidth $Chars); Color = $cBorder }
