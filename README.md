@@ -39,18 +39,20 @@ PSYamlTUI turns a simple YAML file into a fully navigable terminal UI - recursiv
 
 ## Features
 
-- **YAML-driven menus** → define your menu once in a YAML file and launch it anywhere with a single command
-- **Recursive submenus** → nest menus as deep as you need via inline `children` or external `import` files
-- **Three rendering tiers** → ANSI+Unicode, Write-Host+Unicode, and Write-Host+ASCII means it works everywhere from Windows Terminal to legacy consoles without any config
-- **Automatic terminal detection** → PSYamlTUI figures out what your terminal supports so you don't have to
-- **Five border styles** → Single, Double, Rounded, Heavy, and ASCII to match your vibe
-- **Fully customizable themes** → pass a theme hashtable or point `-ThemePath` at a YAML or JSON theme file
-- **Remappable key bindings** → remap any key to make navigation feel exactly right for you
-- **Token substitution** → use `{{key}}` placeholders in your YAML and supply values from `vars.yaml`, `-VarsPath`, or `-Context`
-- **Before hooks** → gate branch access or leaf execution with reusable PowerShell functions that return `$true`, `$false`, or throw
-- **Status bar** → show session context like connected user, environment name, or anything else right inside the menu
-- **Safe execution** → scripts and functions are called via the `&` operator with path validation, root-jail enforcement, and injection prevention; `Invoke-Expression` is never used
-- **PowerShell 5.1 and 7+** → works on both Windows PowerShell and PowerShell Core
+| Feature | What it gives you |
+|---|---|
+| YAML-driven menus | Define your menu once in YAML and launch it anywhere with a single command. |
+| Recursive submenus | Nest as deep as needed via inline `children` or external `import` files. |
+| Three rendering tiers | ANSI+Unicode, Write-Host+Unicode, and Write-Host+ASCII for modern and legacy terminals. |
+| Automatic terminal detection | PSYamlTUI detects terminal capabilities automatically. |
+| Five border styles | Choose Single, Double, Rounded, Heavy, or ASCII. |
+| Fully customizable themes | Pass a theme hashtable or point `-ThemePath` to a YAML/JSON theme file. |
+| Remappable key bindings | Map navigation keys to match your workflow. |
+| Token substitution | Use `{{key}}` placeholders with values from `vars.yaml`, `-VarsPath`, or `-Context`. |
+| Before hooks | Gate branch access or leaf execution with reusable hook functions. |
+| Status bar | Show context such as connected user, environment, or any runtime metadata. |
+| Safe execution | Calls scripts/functions via `&` with path validation, root-jail enforcement, and injection checks. |
+| PowerShell 5.1 and 7+ | Works on both Windows PowerShell and PowerShell Core. |
 
 ---
 
@@ -72,22 +74,29 @@ Get-Command -Module PSYamlTUI
 
 ## Quick start
 
-### Simple → just point it at a YAML file and go
-```powershell
-Start-Menu -Path .\menu.yaml
+### Step 1: Create a basic menu file
+
+Create `menu.yaml` in your current folder:
+
+```yaml
+menu:
+  title: "Main Menu"
+  items:
+    - label: "Show date"
+      call: "Get-Date"
+    - label: "Exit"
+      exit: true
 ```
 
-### Intermediate → add a status bar and a rounded border
+### Step 2: Define optional status and key bindings
+
 ```powershell
-Start-Menu -Path .\menu.yaml -BorderStyle Rounded -StatusData @{
-  'Connected As' = ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name -split '\\')[-1]
+$statusData = @{
+    'Connected As' = ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name -split '\\')[-1]
     'Environment'  = 'Production'
 }
-```
 
-### Advanced → vars, context, YAML theme file, and remapped keys
-```powershell
-Start-Menu -Path .\menu.yaml -VarsPath .\production.vars.yaml -Context @{ currentUser = $env:USERNAME } -ThemePath .\theme.yaml -BorderStyle Double -KeyBindings @{
+$keyBindings = @{
     Up     = [System.ConsoleKey]::UpArrow
     Down   = [System.ConsoleKey]::DownArrow
     Select = [System.ConsoleKey]::RightArrow
@@ -97,11 +106,35 @@ Start-Menu -Path .\menu.yaml -VarsPath .\production.vars.yaml -Context @{ curren
 }
 ```
 
-You can find ready-to-run examples in [`Docs/Examples/MenuLaunchers/`](Docs/Examples/MenuLaunchers/).
+### Step 3: Launch the menu
+
+```powershell
+Start-Menu -Path .\menu.yaml -BorderStyle Rounded -StatusData $statusData -KeyBindings $keyBindings
+```
+
+### Run the included launchers from repo root
+
+This is optional and intended for testing or demos. It is not a required setup step.
+
+If you cloned the repository and your terminal is at the root of the cloned folder,
+you can run the example launchers directly with full relative paths:
+
+```powershell
+# From repo root
+.\Docs\Examples\MenuLaunchers\Simple-Example.ps1
+.\Docs\Examples\MenuLaunchers\Intermediate-Example.ps1
+.\Docs\Examples\MenuLaunchers\Advanced-Example.ps1
+```
+
+If you create your own launcher in this folder (for example `menus.ps1`), run it the same way:
+
+```powershell
+.\Docs\Examples\MenuLaunchers\menus.ps1
+```
 
 ---
 
-## Parameter reference
+## Start-Menu Parameter reference
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -267,7 +300,8 @@ Start-Menu -Path .\menu.yaml -ThemePath .\theme.yaml
 
 ## Contributing
 
-Contributions are very welcome! If you have an idea or found a bug, please open an issue first so we can talk through it before you start building. Pull requests are appreciated.
+
+If you found a bug or have an idea, opening an issue first is helpful (but not required) so we can align on scope.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for more details.
 
