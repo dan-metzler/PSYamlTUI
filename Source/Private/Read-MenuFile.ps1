@@ -256,13 +256,13 @@ function Resolve-MenuItems {
             }
 
             $result.Add([PSCustomObject]@{
-                NodeType    = 'BRANCH'
-                Label       = $label
-                Description = $importDesc
-                Hotkey      = $importHotkey
-                Children    = $resolvedImportedItems
-                Before      = $importBefore
-            })
+                    NodeType    = 'BRANCH'
+                    Label       = $label
+                    Description = $importDesc
+                    Hotkey      = $importHotkey
+                    Children    = $resolvedImportedItems
+                    Before      = $importBefore
+                })
         }
         else {
             $result.Add((Assert-MenuItem -Item $item -RootDir $RootDir -LineMap $LineMap -Tokens $Tokens))
@@ -389,6 +389,8 @@ function Assert-MenuItem {
     }
 
     $confirm = $Item.ContainsKey('confirm') -and $Item['confirm'] -eq $true
+    # details: is only meaningful on leaf (executable) nodes -- not available on BRANCH or EXIT
+    $details = if ($Item.ContainsKey('details')) { [string]$Item['details'] } else { $null }
 
     # -- 3. SCRIPT — ends in .ps1 or contains path separators -----------------
     if ($call -match '\.ps1$' -or $call -match '[/\\]') {
@@ -396,6 +398,7 @@ function Assert-MenuItem {
             NodeType    = 'SCRIPT'
             Label       = $label
             Description = $description
+            Details     = $details
             Hotkey      = $hotkey
             Call        = $call
             Params      = $params
@@ -409,6 +412,7 @@ function Assert-MenuItem {
         NodeType    = 'FUNCTION'
         Label       = $label
         Description = $description
+        Details     = $details
         Hotkey      = $hotkey
         Call        = $call
         Params      = $params
