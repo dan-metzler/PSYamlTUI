@@ -201,7 +201,12 @@ function Show-MenuFrame {
 
                     if ($proceed) {
                         Clear-ConsoleSafe
-                        Write-BorderedText -TextContent "Running: $($sel.Label)" -TextColor $Theme.Title -BorderColor $Theme.Border -Chars $Chars
+                        if (-not [string]::IsNullOrEmpty($sel.Details)) {
+                            Write-BorderedText -Title 'Running...' -Text "$($sel.Label)" -Details $sel.Details -TextColor $Theme.Title -BorderColor $Theme.Border -Chars $Chars
+                        }
+                        else {
+                            Write-BorderedText -Title 'Running...' -Text "$($sel.Label)" -TextColor $Theme.Title -BorderColor $Theme.Border -Chars $Chars
+                        }
                         Write-Host ''
 
                         if ($Timer) {
@@ -228,7 +233,7 @@ function Show-MenuFrame {
                             $white = "${esc}[37m"
 
                             $timerString = "${darkGray}$($Chars.BottomLeft)$($Chars['Arrow'])${r} ${white}$($e.ToString('hh'))${r}${brightBlue}h${r} ${white}$($e.ToString('mm'))${r}${brightMagenta}m${r} ${white}$($e.ToString('ss'))${r}${brightGreen}s${r} ${white}$($e.ToString('fff'))${r}${brightYellow}ms${r}"
-                            Write-BorderedText -TextContent $timerString -TextColor $Theme.Title -BorderColor 'DarkGray' -Chars $Chars
+                            Write-BorderedText -Title "Runtime" -Text $timerString -TextColor $Theme.Title -BorderColor 'DarkGray' -Chars $Chars
                         }
 
                         Write-Host ''
@@ -777,18 +782,37 @@ function Build-HostLines {
 function Write-BorderedText {
     <#
     .SYNOPSIS
-        Renders a single-line bordered box announcing the currently executing leaf node.
+        Renders a bordered box with optional title, description, and text wrapping.
     .DESCRIPTION
-        Draws a top border, a content line, and a bottom border using the same character
-        set as the menu frame. Colors are sourced from the active theme. Intended to be
-        called immediately after Clear-ConsoleSafe in the leaf-node execution block so
-        the user can see which action is running before any script output appears.
-    .PARAMETER TextContent
-        The text to display inside the box (e.g. "Running: My-Script").
+        Draws a top border, one or more content lines, and a bottom border using the
+        same character set as the menu frame. Text longer than the box inner width is
+        wrapped automatically. An optional title is embedded in the top border.
+        Optional details text is rendered below the main text in a dimmer color,
+        separated by a horizontal rule, and also wraps automatically.
+        Colors are sourced from the active theme. Intended to be called immediately
+        after Clear-ConsoleSafe in the leaf-node execution block so the user can see
+        which action is running before any script output appears.
+    .PARAMETER Text
+        The primary text to display inside the box. Long lines are wrapped automatically.
+    .PARAMETER Title
+        Optional title embedded in the top border line.
+    .PARAMETER Details
+        Optional secondary text rendered below the main text, separated by a divider.
+        Long lines are wrapped automatically. Displayed in DetailsColor.
     .PARAMETER BorderColor
-        ConsoleColor name for the box-drawing characters. Pass $Theme.Border.
+        ConsoleColor name for the box-drawing characters. Defaults to DarkCyan.
+        Pass an empty string to use the terminal default color.
     .PARAMETER TextColor
-        ConsoleColor name for the text inside the box. Pass $Theme.Title.
+        ConsoleColor name for the primary text inside the box. Defaults to White.
+        Pass an empty string to use the terminal default color.
+    .PARAMETER DetailsColor
+        ConsoleColor name for the details text. Defaults to DarkGray.
+        Pass an empty string to use the terminal default color.
+    .PARAMETER MaxWidth
+        Total box width including the two border characters. Defaults to 80.
+        Automatically clamped to the current console window width so the box never
+        overflows. When details text is present the minimum inner width is wider
+        (60 chars) so the text has room to breathe.
     .PARAMETER Chars
         Character set hashtable from Get-CharacterSet. Supplies the correct border
         glyphs for the active border style (Unicode or ASCII).
@@ -796,15 +820,29 @@ function Write-BorderedText {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        [string]$TextContent,
+        [string]$Text,
 
-        [Parameter(Mandatory)]
-        [AllowEmptyString()]
-        [string]$BorderColor,
+        [Parameter()]
+        [string]$Title = '',
 
-        [Parameter(Mandatory)]
+        [Parameter()]
+        [string]$Details = '',
+
+        [Parameter()]
         [AllowEmptyString()]
-        [string]$TextColor,
+        [string]$BorderColor = 'DarkCyan',
+
+        [Parameter()]
+        [AllowEmptyString()]
+        [string]$TextColor = 'White',
+
+        [Parameter()]
+        [AllowEmptyString()]
+        [string]$DetailsColor = 'DarkGray',
+
+        [Parameter()]
+        [ValidateRange(20, 500)]
+        [int]$MaxWidth = 80,
 
         [Parameter(Mandatory)]
         [hashtable]$Chars
@@ -814,44 +852,101 @@ function Write-BorderedText {
     # -ForegroundColor argument rather than an invalid empty-string color name.
     $cBorder = if ([string]::IsNullOrEmpty($BorderColor)) { $null } else { $BorderColor }
     $cText = if ([string]::IsNullOrEmpty($TextColor)) { $null } else { $TextColor }
+    $cDesc = if ([string]::IsNullOrEmpty($DetailsColor)) { $null } else { $DetailsColor }
 
-    # Strip ANSI escape sequences before measuring -- the raw string length is
-    # inflated by invisible color codes, which throws off padding calculations.
-    $visibleLength = ($TextContent -replace '\x1b\[[0-9;]*m', '').Length
+    # Helper: wrap a string into lines no longer than $width visible characters.
+    function Invoke-WordWrap {
+        param([string]$Content, [int]$Width)
+        $out = [System.Collections.Generic.List[string]]::new()
+        foreach ($rawLine in ($Content -split "`n")) {
+            $remaining = $rawLine
+            while (($remaining -replace '\x1b\[[0-9;]*m', '').Length -gt $Width) {
+                # Find the last space within the width limit to break on a word boundary.
+                # Fall back to a hard cut only when no space exists (e.g. a single long word).
+                $candidate = $remaining.Substring(0, $Width)
+                $breakAt = $candidate.LastIndexOf(' ')
+                if ($breakAt -le 0) {
+                    # No space found -- hard cut is the only option.
+                    $out.Add($candidate)
+                    $remaining = $remaining.Substring($Width)
+                }
+                else {
+                    $out.Add($remaining.Substring(0, $breakAt))
+                    $remaining = $remaining.Substring($breakAt + 1)  # +1 skips the space itself
+                }
+            }
+            $out.Add($remaining)
+        }
+        return $out
+    }
 
-    # Inner content width: visible text + 2 leading spaces + at least 4 trailing spaces.
-    # Minimum of 40 keeps the box from being too narrow for very short labels.
-    $innerWidth = [Math]::Max(40, $visibleLength + 6)
-    $padRight = $innerWidth - 2 - $visibleLength
+    # Helper: write one padded content row.
+    function Write-ContentLine {
+        param([string]$Line, [int]$InnerWidth, $LineColor)
+        $visLen = ($Line -replace '\x1b\[[0-9;]*m', '').Length
+        $padRight = $InnerWidth - 2 - $visLen
+        $left = $Chars.Vertical + ' '
+        $right = (' ' * $padRight) + ' ' + $Chars.Vertical
+        if ($null -ne $cBorder) { Write-Host -Object $left  -NoNewline -ForegroundColor $cBorder } else { Write-Host -Object $left  -NoNewline }
+        if ($null -ne $LineColor) { Write-Host -Object $Line -NoNewline -ForegroundColor $LineColor } else { Write-Host -Object $Line -NoNewline }
+        if ($null -ne $cBorder) { Write-Host -Object $right -ForegroundColor $cBorder } else { Write-Host -Object $right }
+    }
 
-    $top = $Chars.TopLeft + ($Chars.Horizontal * $innerWidth) + $Chars.TopRight
+    # Total box width = $innerWidth + 2 border chars.
+    # Clamp MaxWidth to the console width so the box never overflows the terminal.
+    $consoleWidth = $Host.UI.RawUI.WindowSize.Width
+    $effectiveMax = [Math]::Min($MaxWidth, $consoleWidth) - 2  # convert to inner width
+
+    # Use a wider minimum when details text is present so it has room to breathe;
+    # a narrow box with long details produces very tall, cramped output.
+    $hasDetails = -not [string]::IsNullOrEmpty($Details)
+    $minInner = if ($hasDetails) { 58 } else { 38 }
+
+    # Establish the final inner width before any wrapping:
+    # must fit the title, respect the minimum, never exceed the effective maximum.
+    $titleLen = ($Title -replace '\x1b\[[0-9;]*m', '').Length
+    $innerWidth = [Math]::Max($minInner, $titleLen + 4)
+    $innerWidth = [Math]::Min($innerWidth, $effectiveMax)
+
+    # Wrap width = inner width minus the two side-padding spaces (one each side).
+    # Because the width is fixed before wrapping, content fills the full available space.
+    $wrapWidth = $innerWidth - 2
+    $wrappedText = Invoke-WordWrap -Content $Text -Width $wrapWidth
+    $wrappedDesc = if ($hasDetails) {
+        Invoke-WordWrap -Content $Details -Width $wrapWidth
+    }
+    else {
+        [System.Collections.Generic.List[string]]::new()
+    }
+
+    # Build top border -- embed title when provided.
+    if ([string]::IsNullOrEmpty($Title)) {
+        $top = $Chars.TopLeft + ($Chars.Horizontal * $innerWidth) + $Chars.TopRight
+    }
+    else {
+        $dashCount = $innerWidth - $titleLen - 2
+        $top = $Chars.TopLeft + ' ' + $Title + ' ' + ($Chars.Horizontal * $dashCount) + $Chars.TopRight
+    }
     $bottom = $Chars.BottomLeft + ($Chars.Horizontal * $innerWidth) + $Chars.BottomRight
-    $leftEdge = $Chars.Vertical + ' '
-    $rightEdge = (' ' * $padRight) + ' ' + $Chars.Vertical
+    $divider = $Chars.LeftT + ($Chars.Horizontal * $innerWidth) + $Chars.RightT
 
-    if ($null -ne $cBorder) {
-        Write-Host -Object $top -ForegroundColor $cBorder
-        Write-Host -Object $leftEdge -NoNewline -ForegroundColor $cBorder
-    }
-    else {
-        Write-Host -Object $top
-        Write-Host -Object $leftEdge -NoNewline
+    # Write top border.
+    if ($null -ne $cBorder) { Write-Host -Object $top -ForegroundColor $cBorder } else { Write-Host -Object $top }
+
+    # Write primary text lines.
+    foreach ($line in $wrappedText) {
+        Write-ContentLine -Line $line -InnerWidth $innerWidth -LineColor $cText
     }
 
-    if ($null -ne $cText) {
-        Write-Host -Object $TextContent -NoNewline -ForegroundColor $cText
-    }
-    else {
-        Write-Host -Object $TextContent -NoNewline
+    # Write divider + description lines when description is present.
+    if ($wrappedDesc.Count -gt 0) {
+        if ($null -ne $cBorder) { Write-Host -Object $divider -ForegroundColor $cBorder } else { Write-Host -Object $divider }
+        foreach ($line in $wrappedDesc) {
+            Write-ContentLine -Line $line -InnerWidth $innerWidth -LineColor $cDesc
+        }
     }
 
-    if ($null -ne $cBorder) {
-        Write-Host -Object $rightEdge -ForegroundColor $cBorder
-        Write-Host -Object $bottom -ForegroundColor $cBorder
-    }
-    else {
-        Write-Host -Object $rightEdge
-        Write-Host -Object $bottom
-    }
+    # Write bottom border.
+    if ($null -ne $cBorder) { Write-Host -Object $bottom -ForegroundColor $cBorder } else { Write-Host -Object $bottom }
 }
 
