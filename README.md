@@ -201,7 +201,8 @@ menu:
 | `call` | no | Script path or function name to execute |
 | `params` | no | Hashtable of parameters splatted to `call` |
 | `confirm` | no | If `true`, prompts Y/N before executing |
-| `description` | no | Subtitle shown when the item is selected |
+| `description` | no | Brief subtitle shown under the item while navigating the menu |
+| `details` | no | Longer text shown in the action banner just before the script or function runs. SCRIPT and FUNCTION nodes only. Supports multi-line YAML block scalars (`\|`) |
 | `hotkey` | no | Single character shortcut, case-insensitive |
 | `before` | no | Pre-execution hook, hook object, or ordered list of hooks |
 

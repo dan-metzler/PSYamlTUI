@@ -1,6 +1,7 @@
 items:
   - label: "Deploy {{appName}}"
     description: "Generate a deployment plan for {{environment}}"
+    details: "This function generates a deployment plan based on the current configuration. It is intended for demonstration purposes and does not perform an actual deployment. Use this to review the steps that would be taken during a deployment to ensure everything is configured correctly."
     hotkey: "D"
     before:
       - hook: "Test-ExampleRole"

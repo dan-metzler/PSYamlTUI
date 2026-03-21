@@ -13,6 +13,7 @@ items:
 
   - label: "Service Check"
     description: "Check a service in {{environment}}"
+    details: "This function is only available to Operators during the maintenance window. It includes actions like restarting services, which should be used with caution."
     before:
       hook: "Test-ExampleRole"
       params:
