@@ -44,7 +44,8 @@ items:
 | `call` | string | Script path or PS function name |
 | `params` | map | Key/value pairs splatted to the call. Strings, bools, numbers only |
 | `confirm` | bool | Prompts Y/N before executing |
-| `description` | string | Subtitle shown under the item when selected |
+| `description` | string | Brief subtitle shown under the item when selected in the menu |
+| `details` | string | Longer text shown in the action banner before the script/function runs. SCRIPT and FUNCTION nodes only |
 | `hotkey` | string | Single character shortcut (case-insensitive) |
 | `before` | string or map or list | Pre-execution hook(s) -- see hooks section |
 
@@ -52,7 +53,7 @@ items:
 
 ## Token Substitution
 
-Tokens in `{{key}}` form are replaced before parsing. Works in: `label`, `description`, `call`, `import`, `params` values, `before` params values.
+Tokens in `{{key}}` form are replaced before parsing. Works in: `label`, `description`, `details`, `call`, `import`, `params` values, `before` params values.
 
 **Source 1 -- `vars.yaml`** (auto-discovered next to `menu.yaml`, or via `-VarsPath`):
 ```yaml
@@ -77,6 +78,33 @@ Usage in YAML:
 ```
 
 Unknown tokens are left as-is -- no error thrown.
+
+---
+
+## description vs details
+
+These two fields serve different purposes at different points in the UI:
+
+| Field | Where it appears | Length | Available on |
+|---|---|---|---|
+| `description` | Subtitle line under the item in the menu, while navigating | Keep it brief -- it is truncated to one line | Any node type |
+| `details` | Action banner rendered before the script or function runs | Can be as long as needed -- wraps automatically | SCRIPT and FUNCTION nodes only |
+
+Use `description` to help users identify what an item does while browsing. Use `details` when the action warrants a fuller explanation -- prerequisites, estimated runtime, side effects, etc.
+
+If `details` is not set, the action banner shows the item label only with no secondary text. `description` is never used as a fallback for `details`.
+
+```yaml
+- label:       "Deploy to Production"
+  description: "Blue/green deployment pipeline"       # shown in the menu while navigating
+  details: |
+    Runs the blue/green deployment against the prod ECS cluster.
+    Traffic is swapped only after all health checks pass.
+    Requires AWS_PROFILE to be set in the current session.
+    Estimated runtime: 3-8 minutes.
+  confirm: true
+  call: './scripts/Deploy-App.ps1'
+```
 
 ---
 
@@ -225,9 +253,11 @@ menu:
           tenant: "{{environment}}"
       children:
 
-        - label:   "Create Account"
-          hotkey:  "C"
-          call:    '{{scriptsPath}}/New-Account.ps1'
+        - label:       "Create Account"
+          hotkey:      "C"
+          description: "Provision a new cloud2 account"
+          details:     "Creates a new account in the {{environment}} tenant. Requires the ApiSession hook to have run successfully."
+          call:        '{{scriptsPath}}/New-Account.ps1'
           params:
             type:  "cloud2"
             env:   "{{environment}}"
