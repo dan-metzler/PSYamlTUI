@@ -153,7 +153,7 @@ function global:Unregister-ExampleHooks {
     foreach ($name in $names) {
         $path = "Function:\\$name"
         if (Test-Path -LiteralPath $path) {
-            Remove-Item -LiteralPath $path -Force
+            Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
         }
     }
 }
