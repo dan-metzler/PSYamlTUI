@@ -23,3 +23,47 @@ items:
     params:
       ServiceName: "W32Time"
       Environment: "{{environment}}"
+
+  - label: "Clear Temp Files"
+    description: "Remove temporary files from all nodes."
+    call: "Get-Date"
+
+  - label: "Network Ping Test"
+    description: "Ping all critical endpoints in {{region}}."
+    call: "Get-Date"
+
+  - label: "System Info Report"
+    description: "Show system info for all servers."
+    call: "Get-Date"
+
+  - label: "Process Report"
+    description: "Generate a process report for {{environment}}."
+    call: "Get-Date"
+
+  - label: "User Audit"
+    description: "Audit user accounts in {{environment}}."
+    call: "Get-Date"
+
+  - label: "Deployment Plan"
+    description: "Preview deployment plan for {{region}}."
+    call: "Get-Date"
+
+  - label: "Cleanup Preview"
+    description: "Preview cleanup actions for {{environment}}."
+    call: "Get-Date"
+
+  - label: "Log Rotation"
+    description: "Rotate logs on all nodes."
+    call: "Get-Date"
+
+  - label: "Disk Usage Report"
+    description: "Check disk usage across all servers."
+    call: "Get-Date"
+
+  - label: "Restart Web Service"
+    description: "Restart the web service on all nodes."
+    call: "Get-Date"
+
+  - label: "Backup Database"
+    description: "Backup the main database for {{environment}}."
+    call: "Get-Date"
