@@ -222,7 +222,47 @@ All keys are remappable via the `-KeyBindings` parameter -- see the Quick Start 
 | `Home` / `End` | Jump to first / last item |
 | `PageUp` / `PageDown` | Scroll long menus |
 
+
 ---
+
+## Index Navigation Mode
+
+For users on high-latency connections, slow hardware, or remote/VDI sessions, the default keybinding navigation (using arrow keys to move the selection) can feel sluggish because the UI re-renders on every navigation keypress.
+
+**Index Navigation Mode** eliminates this by letting you select menu items directly by number:
+
+- Each menu item is prefixed with its 1-based index (e.g., `1.`, `2.`, ...)
+- Just type the number of the item you want and press Enter (or wait a moment)
+- The menu does not re-render as you type; it only updates when you make a selection or use a control key
+- Back, Home, and Quit keys still work as usual
+- Hotkeys and description sub-lines are suppressed in this mode for clarity
+- The selected highlight is not shown—your choice is immediate
+- Only the Back, Quit, and Home key bindings are shown in the footer in this mode. Up, Down, and Select bindings are ignored and not displayed.
+
+**When to use it:**
+
+- If you notice too much lag or flicker when navigating with arrow keys
+- If you're on a remote desktop, SSH, or VDI session
+- If your terminal is slow to redraw
+
+**How to enable:**
+
+Pass the `-IndexNavigation` switch to `Start-Menu`:
+
+```powershell
+Start-Menu -Path .\menu.yaml -IndexNavigation
+```
+
+You can combine this with custom key bindings, status data, or themes as usual.
+
+**Example:**
+
+```powershell
+Start-Menu -Path .\menu.yaml -IndexNavigation -KeyBindings $keyBindings -StatusData $statusData
+```
+
+In index mode, the UI is more responsive on slow systems because it avoids unnecessary TUI refreshing while you are choosing an item.
+
 
 ## Themes
 
