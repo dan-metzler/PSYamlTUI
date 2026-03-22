@@ -95,7 +95,14 @@ function Start-Menu {
 
         # When set, a stopwatch runs for each action and the elapsed time is
         # displayed after the action completes.
-        [switch]$Timer
+        [switch]$Timer,
+
+        # When set, menu items are prefixed with a 1-based number and the user
+        # navigates by typing the item number instead of using arrow keys.
+        # Designed for high-latency environments (VDI, remote sessions) where
+        # minimising re-renders per navigation action improves UX.
+        # Back, Quit, and Home keys remain active. Up/Down/Select are no-ops.
+        [switch]$IndexNavigation
     )
 
     # -- Validate key bindings --------------------------------------------------
@@ -170,6 +177,7 @@ function Start-Menu {
             -StatusData $StatusData `
             -Theme $script:YamlTUI_Theme `
             -Timer:$Timer `
+            -IndexNavigation:$IndexNavigation `
             -IsRoot
 
         # Clear screen on clean exit
