@@ -921,4 +921,285 @@ vars:
 - No test should produce visible console output during a clean run
 - All tests pass on PS 5.1 and PS 7+ without modification
 
+
+
+## Task: Implement -IndexNavigation Mode for PSYamlTUI
+
+Add an `-IndexNavigation` switch parameter to `Start-Menu` that enables
+number-based menu navigation instead of arrow key navigation. This mode
+is designed for high-latency environments (VDI, remote sessions) where
+minimizing re-renders per navigation action improves UX significantly.
+
+---
+
+### New Parameter
+
+Add to `Start-Menu.ps1`:
+```powershell
+[switch]$IndexNavigation
+```
+
+Pass `$IndexNavigation` through every recursive `Show-MenuFrame` call
+alongside the existing `$KeyBindings` parameter. Do not add it to the
+YAML schema -- it is a runtime display/input concern only.
+
+---
+
+### Rendering Changes
+
+#### Item Labels
+
+When `$IndexNavigation` is enabled, prefix every menu item with its
+1-based index:
+```
+Keybinding mode (default):
+  > Deploy Application
+    Generate Report
+    Sync Users
+
+Index mode:
+  1. Deploy Application
+  2. Generate Report
+  3. Sync Users
+```
+
+The selected item highlight and description subtitle still render
+normally. The index prefix is part of the label display only -- it
+does not affect node data or YAML schema.
+
+#### Footer
+
+The footer uses the existing `Get-FooterText` function and the same
+rendering path. When `$IndexNavigation` is enabled, filter out the
+following action keys before generating footer text:
+```powershell
+$excludeInIndexMode = @('Up', 'Down', 'Select')
+```
+
+Back, Quit, and Home remain in the footer unchanged. The footer still
+renders -- it is not hidden entirely.
+
+Example footer output in index mode:
+```
+║  <- Back    H Home    Q Quit    ║
+```
+
+Example footer output in keybinding mode (unchanged):
+```
+║  ↑↓ Navigate    → Select    <- Back    H Home    Q Quit    ║
+```
+
+No other rendering changes. Breadcrumbs, border, title, status bar,
+theme colors, and character set all behave identically in both modes.
+
+---
+
+### Input Loop Changes
+
+`Show-MenuFrame` contains the main input loop. Add a branch at the top
+of the loop based on the `$IndexNavigation` flag.
+
+#### Keybinding Mode (existing, unchanged)
+```powershell
+if (-not $IndexNavigation) {
+    # existing arrow key navigation logic -- do not modify
+}
+```
+
+#### Index Mode Input Loop
+```powershell
+if ($IndexNavigation) {
+    $digitBuffer  = ""
+    $lastKeyTime  = [DateTime]::Now
+    $bufferTimeout = 600   # milliseconds to wait for a second digit
+
+    while ($true) {
+
+        # Check for buffered digit timeout first
+        if ($digitBuffer -ne "") {
+            $elapsed = ([DateTime]::Now - $lastKeyTime).TotalMilliseconds
+            if ($elapsed -ge $bufferTimeout) {
+                $selectedIndex = [int]$digitBuffer - 1
+                $digitBuffer   = ""
+
+                if ($selectedIndex -ge 0 -and $selectedIndex -lt $items.Count) {
+                    # navigate to or execute $items[$selectedIndex]
+                    # use existing node dispatch logic (BRANCH -> recurse, LEAF -> Invoke-MenuAction)
+                }
+                # invalid index -- re-render and continue silently
+                break
+            }
+        }
+
+        if (-not [Console]::KeyAvailable) {
+            Start-Sleep -Milliseconds 50
+            continue
+        }
+
+        $key = [Console]::ReadKey($true)
+
+        # Digit input -- append to buffer
+        if ($key.KeyChar -match '^\d$') {
+            $digitBuffer += $key.KeyChar
+            $lastKeyTime  = [DateTime]::Now
+
+            # If buffer cannot possibly grow to a valid two-digit index, flush immediately
+            # e.g. if there are fewer than 10 items, any single digit is unambiguous
+            $maxIndex = $items.Count
+            if ($maxIndex -lt 10 -or [int]$digitBuffer -gt [math]::Floor($maxIndex / 10)) {
+                $selectedIndex = [int]$digitBuffer - 1
+                $digitBuffer   = ""
+
+                if ($selectedIndex -ge 0 -and $selectedIndex -lt $items.Count) {
+                    # navigate to or execute $items[$selectedIndex]
+                }
+                break
+            }
+            continue
+        }
+
+        # Flush digit buffer immediately on any non-digit key
+        $digitBuffer = ""
+
+        # Navigation keys -- resolved via existing Resolve-KeyAction
+        $action = Resolve-KeyAction -Key $key -KeyBindings $KeyBindings
+
+        switch ($action) {
+            'Back' { return }
+            'Quit' { $script:YamlTUI_Quit = $true; return }
+            'Home' { $script:YamlTUI_Home = $true; return }
+        }
+
+        # Up, Down, Select are ignored in index mode -- no-op
+    }
+}
+```
+
+#### Early Flush Optimization
+
+If the menu has fewer than 10 items, every digit is unambiguous and
+can be dispatched immediately without waiting for the timeout. The
+early flush logic above handles this -- no separate code path needed.
+
+If the menu has 10 or more items:
+- First digit waits for timeout or second digit
+- Second digit flushes immediately
+- Maximum supported index is 99 (two digits)
+- Menus with more than 99 items are uncommon but handled gracefully --
+  only the first 99 items are reachable via index input in this mode.
+  No error is shown, items beyond 99 are still reachable via Back/Home
+  navigation to a parent menu that imports them as a submenu.
+
+---
+
+### Node Dispatch
+
+When a valid index is resolved, use the existing node dispatch logic
+without modification:
+```powershell
+$node = $items[$selectedIndex]
+
+if ($node.exit) {
+    $script:YamlTUI_Quit = $true
+    return
+}
+elseif ($node.children -or $node.import) {
+    # recurse into Show-MenuFrame -- pass $IndexNavigation through
+    Show-MenuFrame -Node $node -Breadcrumb ($Breadcrumb + $node.label) `
+                   -KeyBindings $KeyBindings -IndexNavigation:$IndexNavigation
+}
+else {
+    # execute leaf node -- existing Invoke-MenuAction path
+    Invoke-MenuAction -Node $node
+}
+```
+
+`$IndexNavigation` must be passed through every recursive
+`Show-MenuFrame` call so submenus inherit the same input mode.
+
+---
+
+### Timeout Tuning
+
+The 600ms default timeout is the recommended starting value. It feels
+instant for single digit selection and is short enough to not feel
+sluggish for two-digit selection. Do not expose the timeout as a
+parameter in v1 -- keep it as an internal constant in `Show-MenuFrame`:
+```powershell
+$bufferTimeout = 600   # ms -- intentionally not a parameter in v1
+```
+
+---
+
+### Before Hooks in Index Mode
+
+Before hooks run identically in both modes. The hook execution path
+in `Invoke-MenuAction` and `Invoke-BeforeHook` does not change.
+`[Console]::Clear()` is called before hook execution in both modes.
+After the hook completes the menu re-renders as normal.
+
+---
+
+### What Does NOT Change
+
+- YAML schema -- no new node properties
+- KeyBindings hashtable -- same structure, same validation
+- Resolve-KeyAction -- unchanged, still used for Back/Quit/Home in index mode
+- Get-TerminalProfile -- unchanged
+- Get-CharacterSet -- unchanged
+- Get-ColorTheme -- unchanged
+- Resolve-TokenContext -- unchanged
+- Invoke-MenuAction -- unchanged
+- Invoke-BeforeHook -- unchanged
+- Breadcrumb rendering -- unchanged
+- Status bar rendering -- unchanged
+- Border styles -- unchanged
+- All three render tiers -- unchanged
+
+---
+
+### Tests to Write
+
+Add to `Tests/Unit/Show-MenuFrame.Tests.ps1`:
+
+- Footer excludes Up, Down, Select entries when IndexNavigation enabled
+- Footer includes Back, Quit, Home entries when IndexNavigation enabled
+- Footer is unchanged when IndexNavigation not enabled
+- Menu items are prefixed with 1-based index when IndexNavigation enabled
+- Menu items have no index prefix when IndexNavigation not enabled
+- Single digit resolves immediately when menu has fewer than 10 items
+- Single digit waits for timeout when menu has 10 or more items
+- Two digits resolve immediately without waiting for timeout
+- Invalid index (0, out of range) is ignored and menu re-renders
+- Digit buffer is cleared on non-digit keypress
+- Back key returns from current menu frame in index mode
+- Quit key sets YamlTUI_Quit flag in index mode
+- Home key sets YamlTUI_Home flag in index mode
+- Up, Down, Select keypresses are no-ops in index mode
+- IndexNavigation flag is passed through to recursive Show-MenuFrame calls
+- Submenu opened via index input also uses index navigation mode
+- Before hooks execute normally in index mode
+- Node dispatch logic is identical in both modes
+
+---
+
+### Example Usage
+```powershell
+# Default keybinding mode -- unchanged behavior
+Start-Menu -Path ./menu.yaml
+
+# Index navigation mode -- number input, minimal re-renders
+Start-Menu -Path ./menu.yaml -IndexNavigation
+
+# Index mode with custom keybindings for Back/Quit/Home
+Start-Menu -Path ./menu.yaml -IndexNavigation -KeyBindings @{
+    Up     = [System.ConsoleKey]::UpArrow     # defined but unused in index mode
+    Down   = [System.ConsoleKey]::DownArrow   # defined but unused in index mode
+    Select = [System.ConsoleKey]::Enter       # defined but unused in index mode
+    Back   = [System.ConsoleKey]::Escape
+    Quit   = 'Q'
+    Home   = 'H'
+}
+```
+
 ````
