@@ -2,10 +2,16 @@ function Read-ConsoleKey {
     <#
     .SYNOPSIS
         Thin wrapper around [Console]::ReadKey so tests can mock it.
+        When -NonBlocking is set, returns $null immediately if no key is buffered.
     #>
     [CmdletBinding()]
     [OutputType([System.ConsoleKeyInfo])]
-    param()
+    param(
+        [switch]$NonBlocking
+    )
+    if ($NonBlocking) {
+        if (-not [Console]::KeyAvailable) { return $null }
+    }
     return [Console]::ReadKey($true)
 }
 
@@ -82,7 +88,12 @@ function Show-MenuFrame {
         [array]$InheritedHooks = @(),
 
         [Parameter(Mandatory)]
-        [hashtable]$Theme
+        [hashtable]$Theme,
+
+        # When set, items are prefixed with 1-based numbers and input is handled
+        # via digit entry instead of arrow keys. Back/Quit/Home remain active.
+        # Passed through every recursive Show-MenuFrame call so submenus inherit it.
+        [switch]$IndexNavigation
     )
 
     $items = $MenuData.Items
@@ -97,18 +108,82 @@ function Show-MenuFrame {
         # Render the full frame
         Write-MenuFrame -Title $title -Items $items -SelectedIndex $idx `
             -Breadcrumb $Breadcrumb -TermProfile $TermProfile -Chars $Chars -KeyBindings $KeyBindings `
-            -StatusData $StatusData -Theme $Theme
+            -IndexNavigation:$IndexNavigation -StatusData $StatusData -Theme $Theme
 
-        $key = Read-ConsoleKey
+        if ($IndexNavigation) {
+            # -- Index mode: digit buffer with timeout, Back/Quit/Home still active -
+            $bufferTimeout = 600  # ms -- not a parameter in v1
+            $digitBuffer = ''
+            $lastKeyTime = [DateTime]::Now
+            $action = $null
+            while ($null -eq $action) {
+                if ($digitBuffer -ne '') {
+                    $elapsed = ([DateTime]::Now - $lastKeyTime).TotalMilliseconds
+                    if ($elapsed -ge $bufferTimeout) {
+                        $resolvedIdx = [int]$digitBuffer - 1
+                        $digitBuffer = ''
+                        if ($resolvedIdx -ge 0 -and $resolvedIdx -lt $items.Count) {
+                            $idx = $resolvedIdx
+                            $action = 'Select'
+                        }
+                        else {
+                            $action = '_Noop'
+                        }
+                        break
+                    }
+                }
 
-        $action = Resolve-KeyAction -Key $key -Bindings $KeyBindings
+                $key = Read-ConsoleKey -NonBlocking
+                if ($null -eq $key) {
+                    Start-Sleep -Milliseconds 50
+                    continue
+                }
+
+                if ($key.KeyChar -match '^\d$') {
+                    $digitBuffer += $key.KeyChar
+                    $lastKeyTime = [DateTime]::Now
+                    $maxIndex = $items.Count
+                    # Flush immediately when the buffer cannot grow to a valid two-digit index.
+                    # Single digit is unambiguous when fewer than 10 items, or when the first
+                    # digit already exceeds the tens digit of the item count.
+                    if ($maxIndex -lt 10 -or [int]$digitBuffer -gt [Math]::Floor($maxIndex / 10)) {
+                        $resolvedIdx = [int]$digitBuffer - 1
+                        $digitBuffer = ''
+                        if ($resolvedIdx -ge 0 -and $resolvedIdx -lt $items.Count) {
+                            $idx = $resolvedIdx
+                            $action = 'Select'
+                        }
+                        else {
+                            $action = '_Noop'
+                        }
+                    }
+                    continue
+                }
+
+                # Non-digit key: flush buffer and resolve named action
+                $digitBuffer = ''
+                $resolved = Resolve-KeyAction -Key $key -Bindings $KeyBindings
+                $action = if ($null -ne $resolved) { $resolved } else { '_Noop' }
+            }
+        }
+        else {
+            # -- Keybinding mode (default): single key resolves immediately --------
+            $key = Read-ConsoleKey
+            $action = Resolve-KeyAction -Key $key -Bindings $KeyBindings
+        }
 
         switch ($action) {
             'Up' {
-                if ($idx -gt 0) { $idx-- } else { $idx = $items.Count - 1 }
+                # No-op in index mode -- navigation is by number, not arrow key
+                if (-not $IndexNavigation) {
+                    if ($idx -gt 0) { $idx-- } else { $idx = $items.Count - 1 }
+                }
             }
             'Down' {
-                if ($idx -lt ($items.Count - 1)) { $idx++ } else { $idx = 0 }
+                # No-op in index mode -- navigation is by number, not arrow key
+                if (-not $IndexNavigation) {
+                    if ($idx -lt ($items.Count - 1)) { $idx++ } else { $idx = 0 }
+                }
             }
             'Select' {
                 $sel = $items[$idx]
@@ -153,6 +228,7 @@ function Show-MenuFrame {
                         Show-MenuFrame -MenuData $sub -RootDir $RootDir -TermProfile $TermProfile `
                             -Chars $Chars -Breadcrumb $newCrumb -KeyBindings $KeyBindings `
                             -StatusData $StatusData -Theme $Theme -Timer:$Timer `
+                            -IndexNavigation:$IndexNavigation `
                             -InheritedHooks $hooksList.ToArray()
                     }
 
@@ -354,7 +430,11 @@ function Resolve-KeyAction {
 function Get-FooterText {
     # Builds the footer hint line from the key bindings hashtable.
     # Takes the first binding per action and formats it as a bracketed key name.
-    param([hashtable]$Bindings)
+    # In index mode, Up/Down/Select are excluded -- only Back/Home/Quit are shown.
+    param(
+        [hashtable]$Bindings,
+        [switch]$IndexNavigation
+    )
 
     $fmtKey = {
         param($val)
@@ -376,6 +456,9 @@ function Get-FooterText {
     $hm = if ($Bindings.ContainsKey('Home')) { & $fmtKey $Bindings['Home'] }   else { 'H' }
     $qt = if ($Bindings.ContainsKey('Quit')) { & $fmtKey $Bindings['Quit'] }   else { 'Q' }
 
+    if ($IndexNavigation) {
+        return "[$bk] Back  [$hm] Home  [$qt] Quit"
+    }
     return "[$up/$dn] Navigate  [$sel] Select  [$bk] Back  [$hm] Home  [$qt] Quit"
 }
 
@@ -396,14 +479,16 @@ function Write-MenuFrame {
         [hashtable]$StatusData,
 
         [Parameter(Mandatory)]
-        [hashtable]$Theme
+        [hashtable]$Theme,
+
+        [switch]$IndexNavigation
     )
 
     # Inner width = full line width minus the two border chars.
     # Cap to avoid overflow; ensure a sensible minimum.
     $innerWidth = [Math]::Max(38, [Math]::Min($TermProfile.Width - 4, 96))
 
-    $footerText = Get-FooterText -Bindings $KeyBindings
+    $footerText = Get-FooterText -Bindings $KeyBindings -IndexNavigation:$IndexNavigation
 
     Clear-ConsoleSafe
 
@@ -411,14 +496,14 @@ function Write-MenuFrame {
         # Tier 3: build complete ANSI frame string, write in one call
         $frame = Build-AnsiFrame -Title $Title -Items $Items -SelectedIndex $SelectedIndex `
             -Breadcrumb $Breadcrumb -InnerWidth $innerWidth -Chars $Chars -FooterText $footerText `
-            -StatusData $StatusData -Theme $Theme
+            -IndexNavigation:$IndexNavigation -StatusData $StatusData -Theme $Theme
         [Console]::Write($frame)
     }
     else {
         # Tier 1/2: build plain-text lines with color hints, then emit via Write-Host
         $lines = Build-HostLines -Title $Title -Items $Items -SelectedIndex $SelectedIndex `
             -Breadcrumb $Breadcrumb -InnerWidth $innerWidth -Chars $Chars -FooterText $footerText `
-            -StatusData $StatusData -Theme $Theme
+            -IndexNavigation:$IndexNavigation -StatusData $StatusData -Theme $Theme
         foreach ($line in $lines) {
             # Segmented lines (e.g. status rows) need per-segment color calls
             if ($null -ne $line.Segments) {
@@ -510,7 +595,9 @@ function Build-AnsiFrame {
         [hashtable]$StatusData,
 
         [Parameter(Mandatory)]
-        [hashtable]$Theme
+        [hashtable]$Theme,
+
+        [switch]$IndexNavigation
     )
 
     $esc = [char]27
@@ -571,30 +658,46 @@ function Build-AnsiFrame {
         # Build suffix (arrow for branch, hotkey hint)
         $suffixVis = ''
         if ($item.NodeType -eq 'BRANCH') { $suffixVis += " $($Chars.Arrow)" }
-        if ($null -ne $item.Hotkey) { $suffixVis += " [$($item.Hotkey.ToUpper())]" }
+        if (-not $IndexNavigation -and $null -ne $item.Hotkey) { $suffixVis += " [$($item.Hotkey.ToUpper())]" }
 
-        # Visible: "selector label suffix" inside the " X " margin slots
-        # Total visible content: 1(sel) + 1(space) + label + suffix
-        $maxLabelLen = $cw - 2 - $suffixVis.Length  # 2 = selector + space
-        $labelVis = Get-TruncatedLabel -Text $item.Label -MaxLen $maxLabelLen
-        $itemVisRaw = "$selector $labelVis$suffixVis"
-
-        if ($isSelected) {
-            $styledSel = "$asel$selector$rst"
-            $styledLabel = "$asel$labelVis$rst"
+        if ($IndexNavigation) {
+            # Index prefix: right-aligned number + dot + space.
+            # Width is fixed for the whole list so columns stay aligned.
+            # <10 items: "N. " (3 chars)   10-99 items: " N. "/"NN. " (4 chars)
+            $indexPrefixLen = if ($Items.Count -ge 10) { 4 } else { 3 }
+            $indexPrefix = if ($Items.Count -ge 10) { "$($i+1). ".PadLeft(4) } else { "$($i+1). " }
+            $maxLabelLen = $cw - $indexPrefixLen - $suffixVis.Length
+            $labelVis = Get-TruncatedLabel -Text $item.Label -MaxLen $maxLabelLen
+            $itemVisRaw = "$indexPrefix$labelVis$suffixVis"
             $styledSuffix = if ($suffixVis -ne '') { "$ahk$suffixVis$rst" } else { '' }
-            $styledItem = "$styledSel $styledLabel$styledSuffix"
+            # Index number uses hotkey color (dim) so the label reads cleanly.
+            # No selected highlight in index mode -- selection is implicit in the number typed.
+            $styledItem = "$ahk$indexPrefix$rst$aitem$labelVis$rst$styledSuffix"
         }
         else {
-            $styledSuffix = if ($suffixVis -ne '') { "$ahk$suffixVis$rst" } else { '' }
-            # Two spaces: one for the empty selector slot, one for the space after it
-            $styledItem = "  $aitem$labelVis$rst$styledSuffix"
+            # Visible: "selector label suffix" inside the " X " margin slots
+            # Total visible content: 1(sel) + 1(space) + label + suffix
+            $maxLabelLen = $cw - 2 - $suffixVis.Length  # 2 = selector + space
+            $labelVis = Get-TruncatedLabel -Text $item.Label -MaxLen $maxLabelLen
+            $itemVisRaw = "$selector $labelVis$suffixVis"
+
+            if ($isSelected) {
+                $styledSel = "$asel$selector$rst"
+                $styledLabel = "$asel$labelVis$rst"
+                $styledSuffix = if ($suffixVis -ne '') { "$ahk$suffixVis$rst" } else { '' }
+                $styledItem = "$styledSel $styledLabel$styledSuffix"
+            }
+            else {
+                $styledSuffix = if ($suffixVis -ne '') { "$ahk$suffixVis$rst" } else { '' }
+                # Two spaces: one for the empty selector slot, one for the space after it
+                $styledItem = "  $aitem$labelVis$rst$styledSuffix"
+            }
         }
 
         $null = $sb.Append((& $mkLine $itemVisRaw $styledItem $cw $Chars $abrdr $rst) + $nl)
 
-        # Description sub-line for selected item only
-        if ($isSelected -and $null -ne $item.Description) {
+        # Description sub-line for selected item only (suppressed in index mode)
+        if (-not $IndexNavigation -and $isSelected -and $null -ne $item.Description) {
             $descPfx = '   '
             $descVis = $descPfx + (Get-TruncatedLabel -Text $item.Description -MaxLen ($cw - $descPfx.Length))
             $null = $sb.Append((& $mkLine $descVis "$adesc$descVis$rst" $cw $Chars $abrdr $rst) + $nl)
@@ -657,7 +760,9 @@ function Build-HostLines {
         [hashtable]$StatusData,
 
         [Parameter(Mandatory)]
-        [hashtable]$Theme
+        [hashtable]$Theme,
+
+        [switch]$IndexNavigation
     )
 
     $lines = [System.Collections.Generic.List[hashtable]]::new()
@@ -715,17 +820,27 @@ function Build-HostLines {
         $selector = if ($isSelected) { $Chars.Selected } else { ' ' }
         $suffixVis = ''
         if ($item.NodeType -eq 'BRANCH') { $suffixVis += " $($Chars.Arrow)" }
-        if ($null -ne $item.Hotkey) { $suffixVis += " [$($item.Hotkey.ToUpper())]" }
+        if (-not $IndexNavigation -and $null -ne $item.Hotkey) { $suffixVis += " [$($item.Hotkey.ToUpper())]" }
 
-        $maxLabelLen = $cw - 2 - $suffixVis.Length
-        $labelVis = Get-TruncatedLabel -Text $item.Label -MaxLen $maxLabelLen
-        $lineText = "$selector $labelVis$suffixVis"
+        if ($IndexNavigation) {
+            $indexPrefixLen = if ($Items.Count -ge 10) { 4 } else { 3 }
+            $indexPrefix = if ($Items.Count -ge 10) { "$($i+1). ".PadLeft(4) } else { "$($i+1). " }
+            $maxLabelLen = $cw - $indexPrefixLen - $suffixVis.Length
+            $labelVis = Get-TruncatedLabel -Text $item.Label -MaxLen $maxLabelLen
+            $lineText = "$indexPrefix$labelVis$suffixVis"
+        }
+        else {
+            $maxLabelLen = $cw - 2 - $suffixVis.Length
+            $labelVis = Get-TruncatedLabel -Text $item.Label -MaxLen $maxLabelLen
+            $lineText = "$selector $labelVis$suffixVis"
+        }
 
-        $color = if ($isSelected) { $cSel } else { $cItem }
+        # No selected highlight in index mode -- selection is implicit in the number typed.
+        $color = if ($isSelected -and -not $IndexNavigation) { $cSel } else { $cItem }
         $lines.Add((& $mkLine $lineText $color $cw $Chars $cBorder))
 
-        # Description for selected item
-        if ($isSelected -and $null -ne $item.Description) {
+        # Description for selected item (suppressed in index mode)
+        if (-not $IndexNavigation -and $isSelected -and $null -ne $item.Description) {
             $descText = '   ' + $item.Description
             $lines.Add((& $mkLine $descText $cDesc $cw $Chars $cBorder))
         }
