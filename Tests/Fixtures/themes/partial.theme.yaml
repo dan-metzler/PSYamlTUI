@@ -1,4 +1,4 @@
 # Partial theme override fixture for ThemePath YAML theme file tests.
 # Only overrides two keys; the remaining eight keys should fall back to Default theme values.
-Border: "Blue"
-Title:  "White"
+Border: 'Blue'
+Title: 'White'

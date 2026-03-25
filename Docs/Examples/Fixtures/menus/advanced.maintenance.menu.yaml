@@ -1,69 +1,69 @@
 items:
-  - label: "Database Health Check"
-    description: "Test database health for {{environment}}"
+  - label: 'Database Health Check'
+    description: 'Test database health for {{environment}}'
     before:
-      hook: "Test-ExampleSession"
+      hook: 'Test-ExampleSession'
       params:
-        Environment: "{{environment}}"
-        Region: "{{region}}"
-    call: "{{scriptsPath}}/Test-ExampleDatabaseHealth.ps1"
+        Environment: '{{environment}}'
+        Region: '{{region}}'
+    call: '{{scriptsPath}}/Test-ExampleDatabaseHealth.ps1'
     params:
-      Environment: "{{environment}}"
-      Region: "{{region}}"
+      Environment: '{{environment}}'
+      Region: '{{region}}'
 
-  - label: "Service Check"
-    description: "Check a service in {{environment}}"
-    details: "This function is only available to Operators during the maintenance window. It includes actions like restarting services, which should be used with caution."
+  - label: 'Service Check'
+    description: 'Check a service in {{environment}}'
+    details: 'This function is only available to Operators during the maintenance window. It includes actions like restarting services, which should be used with caution.'
     before:
-      hook: "Test-ExampleRole"
+      hook: 'Test-ExampleRole'
       params:
-        RequiredRole: "Operator"
-        CurrentUser: "{{currentUser}}"
-    call: "{{scriptsPath}}/Invoke-ExampleServiceCheck.ps1"
+        RequiredRole: 'Operator'
+        CurrentUser: '{{currentUser}}'
+    call: '{{scriptsPath}}/Invoke-ExampleServiceCheck.ps1'
     params:
-      ServiceName: "W32Time"
-      Environment: "{{environment}}"
+      ServiceName: 'W32Time'
+      Environment: '{{environment}}'
 
-  - label: "Clear Temp Files"
-    description: "Remove temporary files from all nodes."
-    call: "Get-Date"
+  - label: 'Clear Temp Files'
+    description: 'Remove temporary files from all nodes.'
+    call: 'Get-Date'
 
-  - label: "Network Ping Test"
-    description: "Ping all critical endpoints in {{region}}."
-    call: "Get-Date"
+  - label: 'Network Ping Test'
+    description: 'Ping all critical endpoints in {{region}}.'
+    call: 'Get-Date'
 
-  - label: "System Info Report"
-    description: "Show system info for all servers."
-    call: "Get-Date"
+  - label: 'System Info Report'
+    description: 'Show system info for all servers.'
+    call: 'Get-Date'
 
-  - label: "Process Report"
-    description: "Generate a process report for {{environment}}."
-    call: "Get-Date"
+  - label: 'Process Report'
+    description: 'Generate a process report for {{environment}}.'
+    call: 'Get-Date'
 
-  - label: "User Audit"
-    description: "Audit user accounts in {{environment}}."
-    call: "Get-Date"
+  - label: 'User Audit'
+    description: 'Audit user accounts in {{environment}}.'
+    call: 'Get-Date'
 
-  - label: "Deployment Plan"
-    description: "Preview deployment plan for {{region}}."
-    call: "Get-Date"
+  - label: 'Deployment Plan'
+    description: 'Preview deployment plan for {{region}}.'
+    call: 'Get-Date'
 
-  - label: "Cleanup Preview"
-    description: "Preview cleanup actions for {{environment}}."
-    call: "Get-Date"
+  - label: 'Cleanup Preview'
+    description: 'Preview cleanup actions for {{environment}}.'
+    call: 'Get-Date'
 
-  - label: "Log Rotation"
-    description: "Rotate logs on all nodes."
-    call: "Get-Date"
+  - label: 'Log Rotation'
+    description: 'Rotate logs on all nodes.'
+    call: 'Get-Date'
 
-  - label: "Disk Usage Report"
-    description: "Check disk usage across all servers."
-    call: "Get-Date"
+  - label: 'Disk Usage Report'
+    description: 'Check disk usage across all servers.'
+    call: 'Get-Date'
 
-  - label: "Restart Web Service"
-    description: "Restart the web service on all nodes."
-    call: "Get-Date"
+  - label: 'Restart Web Service'
+    description: 'Restart the web service on all nodes.'
+    call: 'Get-Date'
 
-  - label: "Backup Database"
-    description: "Backup the main database for {{environment}}."
-    call: "Get-Date"
+  - label: 'Backup Database'
+    description: 'Backup the main database for {{environment}}.'
+    call: 'Get-Date'

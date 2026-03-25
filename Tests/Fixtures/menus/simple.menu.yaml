@@ -1,9 +1,9 @@
 menu:
-  title: "Test Menu"
+  title: 'Test Menu'
   items:
-    - label: "Action One"
-      call: "./scripts/action-one.ps1"
-    - label: "Function One"
-      call: "Invoke-TestFunction"
-    - label: "Exit"
+    - label: 'Action One'
+      call: './scripts/action-one.ps1'
+    - label: 'Function One'
+      call: 'Invoke-TestFunction'
+    - label: 'Exit'
       exit: true
