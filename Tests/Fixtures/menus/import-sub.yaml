@@ -1,5 +1,5 @@
 items:
-  - label: "Sub Action"
-    call: "./scripts/sub.ps1"
-  - label: "Nested Import Section"
-    import: "./import-sub2.yaml"
+  - label: 'Sub Action'
+    call: './scripts/sub.ps1'
+  - label: 'Nested Import Section'
+    import: './import-sub2.yaml'

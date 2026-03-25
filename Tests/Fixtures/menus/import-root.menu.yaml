@@ -1,7 +1,7 @@
 menu:
-  title: "Import Test"
+  title: 'Import Test'
   items:
-    - label: "Imported Section"
-      import: "./import-sub.yaml"
-    - label: "Exit"
+    - label: 'Imported Section'
+      import: './import-sub.yaml'
+    - label: 'Exit'
       exit: true

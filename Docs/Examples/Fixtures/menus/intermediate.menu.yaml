@@ -1,139 +1,139 @@
 menu:
-  title: "Operations Center"
+  title: 'Operations Center'
   items:
-    - label: "System Dashboard"
-      description: "System health, resources, and process overview"
-      hotkey: "S"
+    - label: 'System Dashboard'
+      description: 'System health, resources, and process overview'
+      hotkey: 'S'
       children:
-        - label: "System Summary"
-          description: "OS version, uptime, CPU, and environment"
-          hotkey: "S"
-          call: "./scripts/Get-ExampleSystemSummary.ps1"
+        - label: 'System Summary'
+          description: 'OS version, uptime, CPU, and environment'
+          hotkey: 'S'
+          call: './scripts/Get-ExampleSystemSummary.ps1'
           params:
-            Environment: "production"
-            Region: "us-east-1"
+            Environment: 'production'
+            Region: 'us-east-1'
 
-        - label: "Top Processes"
-          description: "Top 10 processes ranked by memory usage"
-          hotkey: "P"
-          call: "./scripts/Get-ExampleProcessReport.ps1"
+        - label: 'Temp File Preview'
+          description: 'Preview disk cleanup candidates in TEMP'
+          hotkey: 'T'
+          call: './scripts/Invoke-ExampleCleanupPreview.ps1'
+          params:
+            Path: '%TEMP%'
+            MaxItems: 8
+
+        - label: 'Top Processes'
+          description: 'Top 10 processes ranked by memory usage'
+          hotkey: 'P'
+          call: './scripts/Get-ExampleProcessReport.ps1'
           params:
             Top: 10
 
-        - label: "Temp File Preview"
-          description: "Preview disk cleanup candidates in TEMP"
-          hotkey: "T"
-          call: "./scripts/Invoke-ExampleCleanupPreview.ps1"
-          params:
-            Path: "%TEMP%"
-            MaxItems: 8
-
-    - label: "Network & Connectivity"
-      description: "Ping tests, DNS lookups, and live connections"
-      hotkey: "N"
+    - label: 'Network & Connectivity'
+      description: 'Ping tests, DNS lookups, and live connections'
+      hotkey: 'N'
       children:
-        - label: "Connectivity Check"
-          description: "Ping public hosts and verify local network"
-          hotkey: "C"
-          call: "./scripts/Get-ExampleNetworkStatus.ps1"
+        - label: 'Connectivity Check'
+          description: 'Ping public hosts and verify local network'
+          hotkey: 'C'
+          call: './scripts/Get-ExampleNetworkStatus.ps1'
 
-        - label: "DNS Lookup"
-          description: "Resolve hostnames to IP addresses"
-          hotkey: "D"
-          call: "./scripts/Get-ExampleDnsLookup.ps1"
+        - label: 'DNS Lookup'
+          description: 'Resolve hostnames to IP addresses'
+          hotkey: 'D'
+          call: './scripts/Get-ExampleDnsLookup.ps1'
           params:
-            Hostnames: "google.com,github.com,cloudflare.com"
+            Hostnames: 'google.com,github.com,cloudflare.com'
 
-        - label: "Active Connections"
-          description: "Live established TCP connections"
-          hotkey: "A"
-          call: "./scripts/Get-ExampleActiveConnections.ps1"
+        - label: 'Active Connections'
+          description: 'Live established TCP connections'
+          hotkey: 'A'
+          call: './scripts/Get-ExampleActiveConnections.ps1'
 
-    - label: "Service Monitor"
-      description: "Windows service status checks"
-      hotkey: "M"
+    - label: 'Service Monitor'
+      description: 'Windows service status checks'
+      hotkey: 'M'
       children:
-        - label: "Key Services Summary"
-          description: "Status of all critical services at a glance"
-          hotkey: "K"
-          call: "./scripts/Get-ExampleServiceSummary.ps1"
+        - label: 'Key Services Summary'
+          description: 'Status of all critical services at a glance'
+          hotkey: 'K'
+          call: './scripts/Get-ExampleServiceSummary.ps1'
 
-        - label: "Print Spooler"
-          description: "Check the Windows Print Spooler service"
-          hotkey: "P"
-          call: "./scripts/Invoke-ExampleServiceCheck.ps1"
+        - label: 'Print Spooler'
+          description: 'Check the Windows Print Spooler service'
+          hotkey: 'P'
+          call: './scripts/Invoke-ExampleServiceCheck.ps1'
           params:
-            ServiceName: "Spooler"
-            Environment: "production"
+            ServiceName: 'Spooler'
+            Environment: 'production'
 
-        - label: "Windows Time"
-          description: "Check the Windows Time synchronization service"
-          hotkey: "T"
-          call: "./scripts/Invoke-ExampleServiceCheck.ps1"
+        - label: 'Windows Time'
+          description: 'Check the Windows Time synchronization service'
+          hotkey: 'T'
+          call: './scripts/Invoke-ExampleServiceCheck.ps1'
           params:
-            ServiceName: "W32Time"
-            Environment: "production"
+            ServiceName: 'W32Time'
+            Environment: 'production'
 
-        - label: "DNS Client"
-          description: "Check the DNS Client resolver cache service"
-          hotkey: "D"
-          call: "./scripts/Invoke-ExampleServiceCheck.ps1"
+        - label: 'DNS Client'
+          description: 'Check the DNS Client resolver cache service'
+          hotkey: 'D'
+          call: './scripts/Invoke-ExampleServiceCheck.ps1'
           params:
-            ServiceName: "Dnscache"
-            Environment: "production"
+            ServiceName: 'Dnscache'
+            Environment: 'production'
 
-    - label: "Security & Audit"
-      description: "User sessions, access audit, and security events"
-      hotkey: "A"
+    - label: 'Security & Audit'
+      description: 'User sessions, access audit, and security events'
+      hotkey: 'A'
       children:
-        - label: "User Audit"
-          description: "Active user account and access summary"
-          hotkey: "U"
-          call: "./scripts/Get-ExampleUserAudit.ps1"
+        - label: 'User Audit'
+          description: 'Active user account and access summary'
+          hotkey: 'U'
+          call: './scripts/Get-ExampleUserAudit.ps1'
           params:
-            Environment: "production"
-            Region: "us-east-1"
-            RequestedBy: "{{currentUser}}"
+            Environment: 'production'
+            Region: 'us-east-1'
+            RequestedBy: '{{currentUser}}'
 
-        - label: "Active Session"
-          description: "Current user identity and group memberships"
-          hotkey: "S"
-          call: "./scripts/Get-ExampleActiveSessions.ps1"
+        - label: 'Active Session'
+          description: 'Current user identity and group memberships'
+          hotkey: 'S'
+          call: './scripts/Get-ExampleActiveSessions.ps1'
 
-        - label: "Security Events"
-          description: "Last 8 entries from the Windows Security log"
-          hotkey: "E"
-          call: "./scripts/Get-ExampleSecurityEvents.ps1"
+        - label: 'Security Events'
+          description: 'Last 8 entries from the Windows Security log'
+          hotkey: 'E'
+          call: './scripts/Get-ExampleSecurityEvents.ps1'
 
-    - label: "Reports"
-      description: "Generate environment and deployment reports"
-      hotkey: "R"
+    - label: 'Reports'
+      description: 'Generate environment and deployment reports'
+      hotkey: 'R'
       children:
-        - label: "Regional Health"
-          description: "Infrastructure health summary by region"
-          hotkey: "R"
-          call: "./scripts/Get-ExampleRegionReport.ps1"
+        - label: 'Regional Health'
+          description: 'Infrastructure health summary by region'
+          hotkey: 'R'
+          call: './scripts/Get-ExampleRegionReport.ps1'
           params:
-            Environment: "production"
-            Region: "us-east-1"
+            Environment: 'production'
+            Region: 'us-east-1'
 
-        - label: "Deployment Plan"
-          description: "Generate a phased rollout readiness report"
-          hotkey: "D"
-          call: "./scripts/Get-ExampleDeploymentPlan.ps1"
+        - label: 'Deployment Plan'
+          description: 'Generate a phased rollout readiness report'
+          hotkey: 'D'
+          call: './scripts/Get-ExampleDeploymentPlan.ps1'
           params:
-            AppName: "CoreAPI"
-            Environment: "production"
-            Region: "us-east-1"
-            RequestedBy: "{{currentUser}}"
+            AppName: 'CoreAPI'
+            Environment: 'production'
+            Region: 'us-east-1'
+            RequestedBy: '{{currentUser}}'
 
-        - label: "Database Health"
-          description: "Read-only replication and backup status check"
-          hotkey: "B"
-          call: "./scripts/Test-ExampleDatabaseHealth.ps1"
+        - label: 'Database Health'
+          description: 'Read-only replication and backup status check'
+          hotkey: 'B'
+          call: './scripts/Test-ExampleDatabaseHealth.ps1'
           params:
-            Environment: "production"
-            Region: "us-east-1"
+            Environment: 'production'
+            Region: 'us-east-1'
 
-    - label: "Exit"
+    - label: 'Exit'
       exit: true
