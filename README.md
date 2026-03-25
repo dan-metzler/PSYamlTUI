@@ -26,6 +26,7 @@ PSYamlTUI turns a simple YAML file into a fully navigable terminal UI - recursiv
 - [Features](#features)
 - [Installation](#installation)
 - [Quick start](#quick-start)
+- [VS Code setup](#vs-code-setup)
 - [Parameter reference](#parameter-reference)
 - [YAML schema](#yaml-schema)
 - [Guides](#guides)
@@ -131,6 +132,57 @@ If you create your own launcher in this folder (for example `menus.ps1`), run it
 ```powershell
 .\Docs\Examples\MenuLaunchers\menus.ps1
 ```
+
+---
+
+## VS Code setup
+
+Install the **Red Hat YAML** extension (`redhat.vscode-yaml`) from the VS Code marketplace.
+
+Without it the YAML files open as plain text -- no validation, no autocompletion, no hover docs.
+With it, the extension reads `menu.schema.json` at the repo root and gives you:
+
+- **Validation** -- unknown keys, missing required keys, and wrong value types are flagged inline
+- **Autocompletion** -- `Ctrl+Space` offers valid properties at any point in a menu or vars file
+- **Hover documentation** -- hover over any key to see what it does
+
+The extension is already configured via `.vscode/settings.json` checked into the repo.
+No manual setup is needed beyond installing the extension.
+
+### What menu.schema.json covers
+
+The schema applies to menu files, submenu import files, and vars files:
+
+| File pattern | What it validates |
+|---|---|
+| `*.menu.yaml` | Root menu files -- requires `menu:` wrapper with `title:` and `items:` |
+| `**/import-*.yaml` | Submenu import files -- top-level `items:` only, no `menu:` wrapper |
+| `vars.yaml` / `*.vars.yaml` | Vars files -- top-level `vars:` map, scalar values only |
+
+Theme files (`*.theme.yaml`) use a flat key/value structure and are not covered by this schema.
+
+### Why single quotes matter
+
+`.vscode/settings.json` sets `yaml.format.singleQuote: true` so the YAML formatter always
+uses single-quoted strings. This is important because YAML processes the two quote styles differently:
+
+| Quote style | Escape processing | Safe for Windows paths? |
+|---|---|---|
+| `'single'` | None -- every character is literal | Yes |
+| `"double"` | Yes -- `\n`, `\t`, `\\`, etc. are interpreted | No -- bare `\` can corrupt silently |
+
+Always use single quotes for values in your menu and vars files. Backslashes, curly braces,
+and other special characters are passed through exactly as written:
+
+```yaml
+# Safe -- single-quoted, backslash is literal
+scriptsPath: 'C:\scripts\myapp'
+
+# Unsafe -- double-quoted, \s and \m are undefined escape sequences
+scriptsPath: "C:\scripts\myapp"
+```
+
+The formatter enforces this automatically on save, so you generally do not need to think about it.
 
 ---
 
