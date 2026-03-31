@@ -4,7 +4,7 @@
     GUID              = '3d5cea06-0fe1-4fb0-a6be-b103fd895367'
     Author            = 'Dan Metzler'
     CompanyName       = 'Community'
-    Copyright         = '(c) Dan Metzler. All rights reserved.'
+    Copyright         = ''
     Description       = 'YAML-powered terminal UI menus for PowerShell. Define once, navigate anywhere - with recursive submenus, automatic terminal detection, and safe script execution built in.'
     PowerShellVersion = '5.1'
 
