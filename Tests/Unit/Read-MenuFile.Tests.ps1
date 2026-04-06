@@ -45,6 +45,18 @@ menu:
       $result.Items    | Should -Not -BeNullOrEmpty
     }
 
+    It 'returns Items as a proper array (not scalar) when the menu has exactly one item' {
+      # Regression: PS pipeline unwrapping caused Resolve-MenuItems to return a plain
+      # PSCustomObject (not an array) for single-item menus. Items.Count was $null,
+      # making the index-mode validity check (0 -lt $null) silently fail.
+      $path = New-TempMenuFile -Content $script:SimpleMenuYaml
+      $result = Read-MenuFile -Path $path
+      $result.Items.Count            | Should -Be 1
+      # Pipe the boolean, not the array itself -- piping an array sends its elements,
+      # not the array object, so BeOfType would receive the single PSCustomObject element.
+      ($result.Items -is [array]) | Should -BeTrue
+    }
+
     It 'returns the correct number of items from a root menu file' {
       $yaml = @'
 menu:
