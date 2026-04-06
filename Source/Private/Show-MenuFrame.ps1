@@ -96,7 +96,11 @@ function Show-MenuFrame {
         [switch]$IndexNavigation
     )
 
-    $items = $MenuData.Items
+    # @() forces the value to always be an array -- PS pipeline-unwraps a single-item
+    # return value from Resolve-MenuItems to a scalar PSCustomObject, which has no .Count
+    # property. A null .Count makes the index-mode validity check (0 -lt $null) fail,
+    # silently blocking selection in any menu or submenu with exactly one item.
+    $items = @($MenuData.Items)
     $title = $MenuData.Title
     $idx = 0
     $running = $true

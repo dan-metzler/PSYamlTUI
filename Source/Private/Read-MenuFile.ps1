@@ -86,7 +86,7 @@ function Read-MenuFile {
 
     [PSCustomObject]@{
         Title = if ($menuNode.ContainsKey('title')) { [string]$menuNode['title'] } else { 'Menu' }
-        Items = Resolve-MenuItems -Items $menuNode['items'] -RootDir $rootDir -LineMap $lineMap -Tokens $tokens
+        Items = @(Resolve-MenuItems -Items $menuNode['items'] -RootDir $rootDir -LineMap $lineMap -Tokens $tokens)
     }
 }
 
@@ -247,7 +247,7 @@ function Resolve-MenuItems {
             # Resolve imported items first, then build PSCustomObject directly.
             # Do NOT pass through Assert-MenuItem -- it would call Resolve-MenuItems
             # a second time on the already-resolved PSCustomObjects, which fails.
-            $resolvedImportedItems = Resolve-MenuItems -Items $importedRaw['items'] -RootDir $RootDir -LineMap $LineMap -Tokens $Tokens
+            $resolvedImportedItems = @(Resolve-MenuItems -Items $importedRaw['items'] -RootDir $RootDir -LineMap $LineMap -Tokens $Tokens)
             $importDesc = if ($item.ContainsKey('description')) { [string]$item['description'] } else { $null }
             $importHotkey = if ($item.ContainsKey('hotkey')) { [string]$item['hotkey'] }      else { $null }
             $importBefore = @()
@@ -341,7 +341,7 @@ function Assert-MenuItem {
             throw "Item '$label'${lineHint}: 'children' array must not be empty."
         }
         # Recursively resolve children so every descendant gets a proper NodeType
-        $resolvedChildren = Resolve-MenuItems -Items $children -RootDir $RootDir -LineMap $LineMap -Tokens $Tokens
+        $resolvedChildren = @(Resolve-MenuItems -Items $children -RootDir $RootDir -LineMap $LineMap -Tokens $Tokens)
         return [PSCustomObject]@{
             NodeType    = 'BRANCH'
             Label       = $label
