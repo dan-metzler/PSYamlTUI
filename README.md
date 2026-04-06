@@ -4,12 +4,13 @@
 
 PSYamlTUI turns a simple YAML file into a fully navigable terminal UI - recursive submenus, automatic terminal detection, and safe script execution included.
 
-| Build | Gallery | Downloads | License | PowerShell |
-|-------|---------|-----------|---------|------------|
-| [![build][]][build-site] | [![psgallery][]][ps-site] | [![downloads][]][ps-site] | [![license][]][license-link] | [![ps-version][]][ps-site] |
+| Build | Tests | Gallery | Downloads | License | PowerShell |
+|-------|-------|---------|-----------|---------|------------|
+| [![build][]][build-site] | [![tests][]][build-site] | [![psgallery][]][ps-site] | [![downloads][]][ps-site] | [![license][]][license-link] | [![ps-version][]][ps-site] |
 
 [build]:https://github.com/dan-metzler/PSYamlTUI/actions/workflows/publish.yml/badge.svg
 [build-site]:https://github.com/dan-metzler/PSYamlTUI/actions/workflows/publish.yml
+[tests]:https://img.shields.io/badge/tests-0%20passing-brightgreen
 [psgallery]:https://img.shields.io/powershellgallery/v/PSYamlTUI.svg
 [ps-site]:https://www.powershellgallery.com/packages/PSYamlTUI
 [downloads]:https://img.shields.io/powershellgallery/dt/PSYamlTUI.svg?color=blue
