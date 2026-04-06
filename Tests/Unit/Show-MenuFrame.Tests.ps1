@@ -710,4 +710,76 @@ InModuleScope PSYamlTUI {
             $script:_capturedIndexNav | Should -BeFalse
         }
     }
+
+    # ===========================================================================
+    # Show-MenuFrame -- index mode, single-item menu regression
+    # Regression for: pressing "1" in index mode with exactly one item was silently
+    # ignored. Root cause: PS pipeline-unwrapping turned the 1-element Items array
+    # into a scalar PSCustomObject whose .Count was $null, causing the validity check
+    # (0 -lt $null) to evaluate as false and produce _Noop instead of Select.
+    # ===========================================================================
+
+    Describe 'Show-MenuFrame -- index mode single-item digit selection' {
+
+        BeforeAll {
+            $script:termProfile = [PSCustomObject]@{
+                UseUnicode  = $false
+                UseAnsi     = $false
+                ColorMethod = 'WriteHost'
+                Width       = 80
+            }
+
+            Mock -CommandName 'Write-MenuFrame'   -MockWith {}
+            Mock -CommandName 'Clear-ConsoleSafe' -MockWith {}
+            Mock -CommandName 'Write-Host'        -MockWith {}
+        }
+
+        BeforeEach {
+            $script:YamlTUI_Quit = $false
+            $script:YamlTUI_Home = $false
+        }
+
+        It 'pressing 1 selects the only item when Items is a proper one-element array' {
+            $exitItem = [PSCustomObject]@{
+                NodeType = 'EXIT'; Label = 'Quit'; Description = $null; Hotkey = $null; Before = @()
+            }
+            $menuData = [PSCustomObject]@{
+                Title = 'Single'
+                Items = @($exitItem)
+            }
+
+            $key1 = [System.ConsoleKeyInfo]::new([char]'1', [System.ConsoleKey]::D1, $false, $false, $false)
+            Mock -CommandName 'Read-ConsoleKey' -MockWith { $key1 }
+
+            Show-MenuFrame -MenuData $menuData -RootDir $TestDrive `
+                -TermProfile $script:termProfile -Chars $script:chars `
+                -KeyBindings $script:bindings -Theme $script:theme -IsRoot `
+                -IndexNavigation
+
+            $script:YamlTUI_Quit | Should -BeTrue
+        }
+
+        It 'pressing 1 selects the only item when Items is a scalar PSCustomObject (pipeline-unwrap scenario)' {
+            # This directly tests the @($MenuData.Items) guard in Show-MenuFrame.
+            # Before the fix, Items being a scalar caused .Count to be $null, and the
+            # index-mode check (0 -lt $null) silently produced _Noop instead of Select.
+            $exitItem = [PSCustomObject]@{
+                NodeType = 'EXIT'; Label = 'Quit'; Description = $null; Hotkey = $null; Before = @()
+            }
+            $menuData = [PSCustomObject]@{
+                Title = 'Single'
+                Items = $exitItem  # scalar, not wrapped in array
+            }
+
+            $key1 = [System.ConsoleKeyInfo]::new([char]'1', [System.ConsoleKey]::D1, $false, $false, $false)
+            Mock -CommandName 'Read-ConsoleKey' -MockWith { $key1 }
+
+            Show-MenuFrame -MenuData $menuData -RootDir $TestDrive `
+                -TermProfile $script:termProfile -Chars $script:chars `
+                -KeyBindings $script:bindings -Theme $script:theme -IsRoot `
+                -IndexNavigation
+
+            $script:YamlTUI_Quit | Should -BeTrue
+        }
+    }
 }
