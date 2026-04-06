@@ -42,7 +42,8 @@ Import-Module InvokeBuild
 # Shared across all tasks to avoid redundant module discovery and imports.
 # Populated by the ModuleImport task and consumed by downstream tasks.
 
-$script:moduleName = $null
+$script:moduleName    = $null
+$script:pesterResult  = $null
 
 # ============================================================================
 # Define Build Tasks
@@ -178,10 +179,26 @@ task RunTests ModuleImport, {
         (Join-Path -Path $PSScriptRoot -ChildPath 'Tests\Unit'),
         (Join-Path -Path $PSScriptRoot -ChildPath 'Tests\Integration')
     )
-    $config.Run.Exit = $true
+    $config.Run.Exit     = $true
+    $config.Run.PassThru = $true
     $config.Output.Verbosity = 'Detailed'
 
-    Invoke-Pester -Configuration $config
+    $script:pesterResult = Invoke-Pester -Configuration $config
+}
+
+# ============================================================================
+# Task: UpdateTestBadge
+# ============================================================================
+# Rewrites the tests badge in README.md with the passing count from the most
+# recent Pester run. Depends on RunTests to populate $script:pesterResult.
+
+task UpdateTestBadge RunTests, {
+    $readmePath  = "$PSScriptRoot\README.md"
+    $passedCount = $script:pesterResult.PassedCount
+    $content     = Get-Content -Path $readmePath -Raw
+    $content     = $content -replace '\[tests\]:https://img\.shields\.io/badge/tests-[^-]+-brightgreen', "[tests]:https://img.shields.io/badge/tests-$passedCount%20passing-brightgreen"
+    Set-Content -Path $readmePath -Value $content -NoNewline
+    Write-Verbose "Updated test badge: $passedCount passing" -Verbose
 }
 
 
@@ -191,13 +208,17 @@ task RunTests ModuleImport, {
 # Defines the complete build orchestration sequence.
 # Tasks execute in order; failure at any stage halts the pipeline.
 #
-# Execution sequence:
-#   1. CheckGitStatus        - Ensure build branch is 'main'
-#   2. BuildModule           - Compile and package the module
-#   3. CopyLibFiles          - Copy required library files to the output directory
-#   4. ModuleImport          - Validate and import module artifact
-#   5. GenerateMarkdownDocs  - Create function documentation (depends on ModuleImport)
-#   6. RunTests              - Verify module functionality via Pester
+# Execution sequence (Local):
+#   1. BuildModule    - Compile and package the module
+#   2. CopyLibFiles   - Copy required library files to the output directory
+#   3. ModuleImport   - Validate and import module artifact
+#
+# Execution sequence (Full):
+#   1. BuildModule       - Compile and package the module
+#   2. CopyLibFiles      - Copy required library files to the output directory
+#   3. ModuleImport      - Validate and import module artifact
+#   4. RunTests          - Verify module functionality via Pester
+#   5. UpdateTestBadge   - Rewrite README test badge with current passing count
 
 switch ($Type) {
     "Local" {
@@ -206,8 +227,7 @@ switch ($Type) {
     }
     "Full" {
         Write-Verbose "Executing full build pipeline..." -Verbose
-        task . BuildModule, CopyLibFiles, ModuleImport, RunTests
-
+        task . BuildModule, CopyLibFiles, ModuleImport, RunTests, UpdateTestBadge
     }
     default {
         throw "Invalid build type specified. Use 'Local' or 'Full'."
