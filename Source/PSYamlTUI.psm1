@@ -27,4 +27,5 @@ $script:YamlTUI_TermProfile = $null
 $script:YamlTUI_CharSet = $null
 $script:YamlTUI_Quit = $false
 $script:YamlTUI_Home = $false
+$script:YamlTUI_ImportCache = @{}
 

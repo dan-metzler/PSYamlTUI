@@ -17,7 +17,16 @@ function Read-ConsoleKey {
 
 function Clear-ConsoleSafe {
     [CmdletBinding()]
-    param()
+    param(
+        [PSCustomObject]$TermProfile
+    )
+
+    if ($null -ne $TermProfile -and $TermProfile.UseAnsi) {
+        # Cursor-home avoids the blank-flash that [Console]::Clear() causes.
+        # Build-AnsiFrame writes a fixed-height frame that fully overwrites the previous one.
+        [Console]::Write(([char]27) + '[H')
+        return
+    }
 
     try {
         [Console]::Clear()
@@ -104,15 +113,25 @@ function Show-MenuFrame {
     $title = $MenuData.Title
     $idx = 0
     $running = $true
+    $partialNavPrev = -1
+    $partialNavNew  = -1
+    $innerWidth = [Math]::Max(38, [Math]::Min($TermProfile.Width - 4, 96))
 
     while ($running) {
         # Home signal: at root we stay and re-render; elsewhere we bubble up
         if ($IsRoot -and $script:YamlTUI_Home) { $script:YamlTUI_Home = $false }
 
-        # Render the full frame
-        Write-MenuFrame -Title $title -Items $items -SelectedIndex $idx `
-            -Breadcrumb $Breadcrumb -TermProfile $TermProfile -Chars $Chars -KeyBindings $KeyBindings `
-            -IndexNavigation:$IndexNavigation -StatusData $StatusData -Theme $Theme
+        if ($partialNavPrev -ge 0) {
+            Write-AnsiNavUpdate -Items $items -PrevIdx $partialNavPrev -NewIdx $partialNavNew `
+                -Breadcrumb $Breadcrumb -InnerWidth $innerWidth -Chars $Chars -Theme $Theme
+            $partialNavPrev = -1
+            $partialNavNew  = -1
+        }
+        else {
+            Write-MenuFrame -Title $title -Items $items -SelectedIndex $idx `
+                -Breadcrumb $Breadcrumb -TermProfile $TermProfile -Chars $Chars -KeyBindings $KeyBindings `
+                -IndexNavigation:$IndexNavigation -StatusData $StatusData -Theme $Theme
+        }
 
         if ($IndexNavigation) {
             # -- Index mode: digit buffer with timeout, Back/Quit/Home still active -
@@ -180,13 +199,27 @@ function Show-MenuFrame {
             'Up' {
                 # No-op in index mode -- navigation is by number, not arrow key
                 if (-not $IndexNavigation) {
+                    $prevIdx = $idx
                     if ($idx -gt 0) { $idx-- } else { $idx = $items.Count - 1 }
+                    if ($TermProfile.UseAnsi -and
+                        $null -eq $items[$prevIdx].Description -and
+                        $null -eq $items[$idx].Description) {
+                        $partialNavPrev = $prevIdx
+                        $partialNavNew  = $idx
+                    }
                 }
             }
             'Down' {
                 # No-op in index mode -- navigation is by number, not arrow key
                 if (-not $IndexNavigation) {
+                    $prevIdx = $idx
                     if ($idx -lt ($items.Count - 1)) { $idx++ } else { $idx = 0 }
+                    if ($TermProfile.UseAnsi -and
+                        $null -eq $items[$prevIdx].Description -and
+                        $null -eq $items[$idx].Description) {
+                        $partialNavPrev = $prevIdx
+                        $partialNavNew  = $idx
+                    }
                 }
             }
             'Select' {
@@ -214,7 +247,7 @@ function Show-MenuFrame {
                             if ($hookResult -eq $false) { $branchProceeds = $false }
                         }
                         catch {
-                            Clear-ConsoleSafe
+                            Clear-ConsoleSafe -TermProfile $TermProfile
                             Write-Host ''
                             Write-Host "  Hook error: $_" -ForegroundColor Red
                             Write-Host ''
@@ -255,7 +288,7 @@ function Show-MenuFrame {
                             if ($hookResult -eq $false) { $proceed = $false }
                         }
                         catch {
-                            Clear-ConsoleSafe
+                            Clear-ConsoleSafe -TermProfile $TermProfile
                             Write-Host ''
                             Write-Host "  Hook error: $_" -ForegroundColor Red
                             Write-Host ''
@@ -266,7 +299,7 @@ function Show-MenuFrame {
                     }
 
                     if ($proceed -and $sel.Confirm) {
-                        Clear-ConsoleSafe
+                        Clear-ConsoleSafe -TermProfile $TermProfile
                         Write-Host ''
                         Write-Host "  Confirm: $($sel.Label)" -ForegroundColor $Theme.ItemSelected
                         if ($null -ne $sel.Description) {
@@ -280,7 +313,7 @@ function Show-MenuFrame {
                     }
 
                     if ($proceed) {
-                        Clear-ConsoleSafe
+                        Clear-ConsoleSafe -TermProfile $TermProfile
                         if (-not [string]::IsNullOrEmpty($sel.Details)) {
                             Write-BorderedText -Title 'Running...' -Text "$($sel.Label)" -Details $sel.Details -TextColor $Theme.Title -BorderColor $Theme.Border -Chars $Chars
                         }
@@ -293,12 +326,14 @@ function Show-MenuFrame {
                             $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
                         }
 
+                        try { [Console]::CursorVisible = $true } catch {}
                         try {
                             Invoke-MenuAction -Node $sel -RootDir $RootDir
                         }
                         catch {
                             Write-Host "`nError: $_" -ForegroundColor Red
                         }
+                        try { [Console]::CursorVisible = $false } catch {}
 
                         if ($Timer) {
                             $stopwatch.Stop()
@@ -318,6 +353,7 @@ function Show-MenuFrame {
 
                         Write-Host ''
                         Write-Host '  Press any key to return to menu...' -ForegroundColor $Theme.FooterText
+                        while ([Console]::KeyAvailable) { $null = [Console]::ReadKey($true) }
                         $null = Read-ConsoleKey
                     }
                 }
@@ -494,7 +530,7 @@ function Write-MenuFrame {
 
     $footerText = Get-FooterText -Bindings $KeyBindings -IndexNavigation:$IndexNavigation
 
-    Clear-ConsoleSafe
+    Clear-ConsoleSafe -TermProfile $TermProfile
 
     if ($TermProfile.UseAnsi) {
         # Tier 3: build complete ANSI frame string, write in one call
@@ -584,6 +620,59 @@ function Get-AnsiCode {
     return "${Esc}[${code}m"
 }
 
+function Get-AnsiItemLine {
+    # Builds the bordered ANSI string for one menu item. No newline appended.
+    # Shared between Build-AnsiFrame (full render) and Write-AnsiNavUpdate (partial nav).
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [PSCustomObject]$Item,
+        [bool]$IsSelected,
+        [int]$ItemIndex,
+        [int]$ItemCount,
+        [switch]$IndexNavigation,
+        [int]$ContentWidth,
+        [hashtable]$Chars,
+        [string]$AbrdrCode,
+        [string]$AitemCode,
+        [string]$AselCode,
+        [string]$AhkCode,
+        [string]$RstCode
+    )
+
+    $suffixVis = ''
+    if ($Item.NodeType -eq 'BRANCH') { $suffixVis += " $($Chars.Arrow)" }
+    if (-not $IndexNavigation -and $null -ne $Item.Hotkey) { $suffixVis += " [$($Item.Hotkey.ToUpper())]" }
+
+    if ($IndexNavigation) {
+        $indexPrefixLen = if ($ItemCount -ge 10) { 4 } else { 3 }
+        $indexPrefix    = if ($ItemCount -ge 10) { "$($ItemIndex + 1). ".PadLeft(4) } else { "$($ItemIndex + 1). " }
+        $maxLabelLen    = $ContentWidth - $indexPrefixLen - $suffixVis.Length
+        $labelVis       = Get-TruncatedLabel -Text $Item.Label -MaxLen $maxLabelLen
+        $itemVisRaw     = "$indexPrefix$labelVis$suffixVis"
+        $styledSuffix   = if ($suffixVis -ne '') { "$AhkCode$suffixVis$RstCode" } else { '' }
+        $styledItem     = "$AhkCode$indexPrefix$RstCode$AitemCode$labelVis$RstCode$styledSuffix"
+    }
+    else {
+        $selector    = if ($IsSelected) { $Chars.Selected } else { ' ' }
+        $maxLabelLen = $ContentWidth - 2 - $suffixVis.Length
+        $labelVis    = Get-TruncatedLabel -Text $Item.Label -MaxLen $maxLabelLen
+        $itemVisRaw  = "$selector $labelVis$suffixVis"
+
+        if ($IsSelected) {
+            $styledSuffix = if ($suffixVis -ne '') { "$AhkCode$suffixVis$RstCode" } else { '' }
+            $styledItem   = "$AselCode$selector$RstCode $AselCode$labelVis$RstCode$styledSuffix"
+        }
+        else {
+            $styledSuffix = if ($suffixVis -ne '') { "$AhkCode$suffixVis$RstCode" } else { '' }
+            $styledItem   = "  $AitemCode$labelVis$RstCode$styledSuffix"
+        }
+    }
+
+    $pad = [Math]::Max(0, $ContentWidth - $itemVisRaw.Length)
+    return "$AbrdrCode$($Chars.Vertical)$RstCode $styledItem$(' ' * $pad) $AbrdrCode$($Chars.Vertical)$RstCode"
+}
+
 function Build-AnsiFrame {
     [CmdletBinding()]
     param(
@@ -657,48 +746,10 @@ function Build-AnsiFrame {
         $item = $Items[$i]
         $isSelected = ($i -eq $SelectedIndex)
 
-        $selector = if ($isSelected) { $Chars.Selected } else { ' ' }
-
-        # Build suffix (arrow for branch, hotkey hint)
-        $suffixVis = ''
-        if ($item.NodeType -eq 'BRANCH') { $suffixVis += " $($Chars.Arrow)" }
-        if (-not $IndexNavigation -and $null -ne $item.Hotkey) { $suffixVis += " [$($item.Hotkey.ToUpper())]" }
-
-        if ($IndexNavigation) {
-            # Index prefix: right-aligned number + dot + space.
-            # Width is fixed for the whole list so columns stay aligned.
-            # <10 items: "N. " (3 chars)   10-99 items: " N. "/"NN. " (4 chars)
-            $indexPrefixLen = if ($Items.Count -ge 10) { 4 } else { 3 }
-            $indexPrefix = if ($Items.Count -ge 10) { "$($i+1). ".PadLeft(4) } else { "$($i+1). " }
-            $maxLabelLen = $cw - $indexPrefixLen - $suffixVis.Length
-            $labelVis = Get-TruncatedLabel -Text $item.Label -MaxLen $maxLabelLen
-            $itemVisRaw = "$indexPrefix$labelVis$suffixVis"
-            $styledSuffix = if ($suffixVis -ne '') { "$ahk$suffixVis$rst" } else { '' }
-            # Index number uses hotkey color (dim) so the label reads cleanly.
-            # No selected highlight in index mode -- selection is implicit in the number typed.
-            $styledItem = "$ahk$indexPrefix$rst$aitem$labelVis$rst$styledSuffix"
-        }
-        else {
-            # Visible: "selector label suffix" inside the " X " margin slots
-            # Total visible content: 1(sel) + 1(space) + label + suffix
-            $maxLabelLen = $cw - 2 - $suffixVis.Length  # 2 = selector + space
-            $labelVis = Get-TruncatedLabel -Text $item.Label -MaxLen $maxLabelLen
-            $itemVisRaw = "$selector $labelVis$suffixVis"
-
-            if ($isSelected) {
-                $styledSel = "$asel$selector$rst"
-                $styledLabel = "$asel$labelVis$rst"
-                $styledSuffix = if ($suffixVis -ne '') { "$ahk$suffixVis$rst" } else { '' }
-                $styledItem = "$styledSel $styledLabel$styledSuffix"
-            }
-            else {
-                $styledSuffix = if ($suffixVis -ne '') { "$ahk$suffixVis$rst" } else { '' }
-                # Two spaces: one for the empty selector slot, one for the space after it
-                $styledItem = "  $aitem$labelVis$rst$styledSuffix"
-            }
-        }
-
-        $null = $sb.Append((& $mkLine $itemVisRaw $styledItem $cw $Chars $abrdr $rst) + $nl)
+        $null = $sb.Append((Get-AnsiItemLine -Item $item -IsSelected $isSelected `
+            -ItemIndex $i -ItemCount $Items.Count -IndexNavigation:$IndexNavigation `
+            -ContentWidth $cw -Chars $Chars `
+            -AbrdrCode $abrdr -AitemCode $aitem -AselCode $asel -AhkCode $ahk -RstCode $rst) + $nl)
 
         # Description sub-line for selected item only (suppressed in index mode)
         if (-not $IndexNavigation -and $isSelected -and $null -ne $item.Description) {
@@ -745,6 +796,51 @@ function Build-AnsiFrame {
     $null = $sb.Append("$abrdr$(Get-HRule $Chars.BottomLeft $Chars.BottomRight $InnerWidth $Chars)$rst$nl")
 
     return $sb.ToString()
+}
+
+# -- ANSI partial navigation update -------------------------------------------
+
+function Write-AnsiNavUpdate {
+    # Rewrites only the two item lines that change on Up/Down navigation.
+    # Only called on the ANSI path when neither item has a description (row offsets are stable).
+    [CmdletBinding()]
+    param(
+        [array]$Items,
+        [int]$PrevIdx,
+        [int]$NewIdx,
+        [string[]]$Breadcrumb,
+        [int]$InnerWidth,
+        [hashtable]$Chars,
+
+        [Parameter(Mandatory)]
+        [hashtable]$Theme
+    )
+
+    $esc = [char]27
+    $rst = "${esc}[0m"
+
+    $abrdr = Get-AnsiCode -Color $Theme.Border       -Esc $esc
+    $aitem = Get-AnsiCode -Color $Theme.ItemDefault  -Esc $esc
+    $asel  = Get-AnsiCode -Color $Theme.ItemSelected -Esc $esc -Bold
+    $ahk   = Get-AnsiCode -Color $Theme.ItemHotkey   -Esc $esc
+
+    $cw = $InnerWidth - 2
+    # Lines before first item: top-border + title + [breadcrumb] + separator + empty-line
+    $headerLines = if ($null -ne $Breadcrumb -and $Breadcrumb.Count -gt 0) { 5 } else { 4 }
+
+    $sb = [System.Text.StringBuilder]::new()
+
+    foreach ($updateIdx in @($PrevIdx, $NewIdx)) {
+        $ansiRow    = $headerLines + 1 + $updateIdx
+        $isSelected = ($updateIdx -eq $NewIdx)
+        $line = Get-AnsiItemLine -Item $Items[$updateIdx] -IsSelected $isSelected `
+            -ItemIndex $updateIdx -ItemCount $Items.Count `
+            -ContentWidth $cw -Chars $Chars `
+            -AbrdrCode $abrdr -AitemCode $aitem -AselCode $asel -AhkCode $ahk -RstCode $rst
+        $null = $sb.Append("${esc}[$ansiRow;1H$line")
+    }
+
+    [Console]::Write($sb.ToString())
 }
 
 # -- Tier 1/2: Write-Host line builder ----------------------------------------

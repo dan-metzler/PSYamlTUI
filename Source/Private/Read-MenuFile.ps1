@@ -231,23 +231,29 @@ function Resolve-MenuItems {
                 throw "Item '$label': imported file not found: $fullImportPath"
             }
 
-            $importedContent = Get-Content -LiteralPath $fullImportPath -Raw -Encoding UTF8
-            # Apply the same token substitution pass to imported file content
-            if ($Tokens.Count -gt 0) {
-                foreach ($tk in $Tokens.Keys) {
-                    $importedContent = $importedContent.Replace("{{$tk}}", [string]$Tokens[$tk])
+            if ($script:YamlTUI_ImportCache.ContainsKey($fullImportPath)) {
+                $resolvedImportedItems = $script:YamlTUI_ImportCache[$fullImportPath]
+            }
+            else {
+                $importedContent = Get-Content -LiteralPath $fullImportPath -Raw -Encoding UTF8
+                # Apply the same token substitution pass to imported file content
+                if ($Tokens.Count -gt 0) {
+                    foreach ($tk in $Tokens.Keys) {
+                        $importedContent = $importedContent.Replace("{{$tk}}", [string]$Tokens[$tk])
+                    }
                 }
-            }
-            $importedRaw = ConvertFrom-YamlText -Content $importedContent
+                $importedRaw = ConvertFrom-YamlText -Content $importedContent
 
-            if (-not ($importedRaw -is [hashtable]) -or -not $importedRaw.ContainsKey('items')) {
-                throw "Imported file '$fullImportPath' must have a top-level 'items' key."
-            }
+                if (-not ($importedRaw -is [hashtable]) -or -not $importedRaw.ContainsKey('items')) {
+                    throw "Imported file '$fullImportPath' must have a top-level 'items' key."
+                }
 
-            # Resolve imported items first, then build PSCustomObject directly.
-            # Do NOT pass through Assert-MenuItem -- it would call Resolve-MenuItems
-            # a second time on the already-resolved PSCustomObjects, which fails.
-            $resolvedImportedItems = @(Resolve-MenuItems -Items $importedRaw['items'] -RootDir $RootDir -LineMap $LineMap -Tokens $Tokens)
+                # Resolve imported items first, then build PSCustomObject directly.
+                # Do NOT pass through Assert-MenuItem -- it would call Resolve-MenuItems
+                # a second time on the already-resolved PSCustomObjects, which fails.
+                $resolvedImportedItems = @(Resolve-MenuItems -Items $importedRaw['items'] -RootDir $RootDir -LineMap $LineMap -Tokens $Tokens)
+                $script:YamlTUI_ImportCache[$fullImportPath] = $resolvedImportedItems
+            }
             $importDesc = if ($item.ContainsKey('description')) { [string]$item['description'] } else { $null }
             $importHotkey = if ($item.ContainsKey('hotkey')) { [string]$item['hotkey'] }      else { $null }
             $importBefore = @()

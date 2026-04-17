@@ -131,6 +131,7 @@ function Start-Menu {
     # These propagate Quit and Home events up through the recursion tree
     $script:YamlTUI_Quit = $false
     $script:YamlTUI_Home = $false
+    $script:YamlTUI_ImportCache = @{}
 
     # -- Parse and validate the menu tree --------------------------------------
     try {
