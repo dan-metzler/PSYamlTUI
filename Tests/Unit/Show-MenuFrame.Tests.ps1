@@ -653,6 +653,367 @@ InModuleScope PSYamlTUI {
     }
 
     # ===========================================================================
+    # Get-AnsiItemLine -- single item line builder for ANSI path
+    # ===========================================================================
+
+    Describe 'Get-AnsiItemLine' {
+
+        BeforeAll {
+            $script:ansiProfile = [PSCustomObject]@{
+                UseUnicode  = $false
+                UseAnsi     = $true
+                ColorMethod = 'Ansi'
+                Width       = 80
+            }
+            $script:aiChars = Get-CharacterSet -TerminalProfile $script:ansiProfile -Style 'ASCII'
+
+            $script:aiEsc   = [char]27
+            $script:aiRst   = "$($script:aiEsc)[0m"
+            $script:aiAbrdr = Get-AnsiCode -Color 'DarkCyan' -Esc $script:aiEsc
+            $script:aiAitem = Get-AnsiCode -Color 'Gray'     -Esc $script:aiEsc
+            $script:aiAsel  = Get-AnsiCode -Color 'Yellow'   -Esc $script:aiEsc -Bold
+            $script:aiAhk   = Get-AnsiCode -Color 'DarkGray' -Esc $script:aiEsc
+
+            function script:StripAnsiAI { param([string]$s); $s -replace '\x1b\[[0-9;]*[a-zA-Z]', '' }
+
+            $script:aiItemNormal = [PSCustomObject]@{
+                NodeType = 'FUNCTION'; Label = 'Foxtrot'; Description = $null; Hotkey = $null
+            }
+            $script:aiItemBranch = [PSCustomObject]@{
+                NodeType = 'BRANCH'; Label = 'SubMenu'; Description = $null; Hotkey = $null; Children = @()
+            }
+            $script:aiItemHotkey = [PSCustomObject]@{
+                NodeType = 'FUNCTION'; Label = 'Kilo'; Description = $null; Hotkey = 'K'
+            }
+        }
+
+        Context 'keybinding mode -- selected item' {
+
+            It 'contains the item label' {
+                $line = Get-AnsiItemLine -Item $script:aiItemNormal -IsSelected $true `
+                    -ItemIndex 0 -ItemCount 3 -ContentWidth 46 -Chars $script:aiChars `
+                    -AbrdrCode $script:aiAbrdr -AitemCode $script:aiAitem -AselCode $script:aiAsel `
+                    -AhkCode $script:aiAhk -RstCode $script:aiRst
+                script:StripAnsiAI $line | Should -Match 'Foxtrot'
+            }
+
+            It 'contains the selector character' {
+                $line = Get-AnsiItemLine -Item $script:aiItemNormal -IsSelected $true `
+                    -ItemIndex 0 -ItemCount 3 -ContentWidth 46 -Chars $script:aiChars `
+                    -AbrdrCode $script:aiAbrdr -AitemCode $script:aiAitem -AselCode $script:aiAsel `
+                    -AhkCode $script:aiAhk -RstCode $script:aiRst
+                script:StripAnsiAI $line | Should -Match ([regex]::Escape($script:aiChars.Selected))
+            }
+        }
+
+        Context 'keybinding mode -- unselected item' {
+
+            It 'contains the item label' {
+                $line = Get-AnsiItemLine -Item $script:aiItemNormal -IsSelected $false `
+                    -ItemIndex 1 -ItemCount 3 -ContentWidth 46 -Chars $script:aiChars `
+                    -AbrdrCode $script:aiAbrdr -AitemCode $script:aiAitem -AselCode $script:aiAsel `
+                    -AhkCode $script:aiAhk -RstCode $script:aiRst
+                script:StripAnsiAI $line | Should -Match 'Foxtrot'
+            }
+
+            It 'does not contain selector character' {
+                $line = Get-AnsiItemLine -Item $script:aiItemNormal -IsSelected $false `
+                    -ItemIndex 1 -ItemCount 3 -ContentWidth 46 -Chars $script:aiChars `
+                    -AbrdrCode $script:aiAbrdr -AitemCode $script:aiAitem -AselCode $script:aiAsel `
+                    -AhkCode $script:aiAhk -RstCode $script:aiRst
+                script:StripAnsiAI $line | Should -Not -Match ([regex]::Escape($script:aiChars.Selected))
+            }
+        }
+
+        Context 'branch arrow suffix' {
+
+            It 'includes arrow suffix for BRANCH node' {
+                $line = Get-AnsiItemLine -Item $script:aiItemBranch -IsSelected $false `
+                    -ItemIndex 0 -ItemCount 3 -ContentWidth 46 -Chars $script:aiChars `
+                    -AbrdrCode $script:aiAbrdr -AitemCode $script:aiAitem -AselCode $script:aiAsel `
+                    -AhkCode $script:aiAhk -RstCode $script:aiRst
+                script:StripAnsiAI $line | Should -Match ([regex]::Escape($script:aiChars.Arrow))
+            }
+
+            It 'does not include arrow suffix for FUNCTION node' {
+                $line = Get-AnsiItemLine -Item $script:aiItemNormal -IsSelected $false `
+                    -ItemIndex 0 -ItemCount 3 -ContentWidth 46 -Chars $script:aiChars `
+                    -AbrdrCode $script:aiAbrdr -AitemCode $script:aiAitem -AselCode $script:aiAsel `
+                    -AhkCode $script:aiAhk -RstCode $script:aiRst
+                script:StripAnsiAI $line | Should -Not -Match ([regex]::Escape($script:aiChars.Arrow))
+            }
+        }
+
+        Context 'hotkey suffix' {
+
+            It 'includes hotkey suffix in keybinding mode' {
+                $line = Get-AnsiItemLine -Item $script:aiItemHotkey -IsSelected $false `
+                    -ItemIndex 0 -ItemCount 3 -ContentWidth 46 -Chars $script:aiChars `
+                    -AbrdrCode $script:aiAbrdr -AitemCode $script:aiAitem -AselCode $script:aiAsel `
+                    -AhkCode $script:aiAhk -RstCode $script:aiRst
+                script:StripAnsiAI $line | Should -Match '\[K\]'
+            }
+
+            It 'suppresses hotkey suffix in index mode' {
+                $line = Get-AnsiItemLine -Item $script:aiItemHotkey -IsSelected $false `
+                    -ItemIndex 0 -ItemCount 3 -IndexNavigation -ContentWidth 46 -Chars $script:aiChars `
+                    -AbrdrCode $script:aiAbrdr -AitemCode $script:aiAitem -AselCode $script:aiAsel `
+                    -AhkCode $script:aiAhk -RstCode $script:aiRst
+                script:StripAnsiAI $line | Should -Not -Match '\[K\]'
+            }
+        }
+
+        Context 'index mode' {
+
+            It 'includes 1-based digit prefix' {
+                $line = Get-AnsiItemLine -Item $script:aiItemNormal -IsSelected $false `
+                    -ItemIndex 0 -ItemCount 3 -IndexNavigation -ContentWidth 46 -Chars $script:aiChars `
+                    -AbrdrCode $script:aiAbrdr -AitemCode $script:aiAitem -AselCode $script:aiAsel `
+                    -AhkCode $script:aiAhk -RstCode $script:aiRst
+                script:StripAnsiAI $line | Should -Match '1\. Foxtrot'
+            }
+
+            It 'does not contain selector character even when IsSelected is true' {
+                $line = Get-AnsiItemLine -Item $script:aiItemNormal -IsSelected $true `
+                    -ItemIndex 0 -ItemCount 3 -IndexNavigation -ContentWidth 46 -Chars $script:aiChars `
+                    -AbrdrCode $script:aiAbrdr -AitemCode $script:aiAitem -AselCode $script:aiAsel `
+                    -AhkCode $script:aiAhk -RstCode $script:aiRst
+                script:StripAnsiAI $line | Should -Not -Match ([regex]::Escape($script:aiChars.Selected))
+            }
+
+            It 'uses 4-char right-aligned prefix for 10-item list' {
+                $line = Get-AnsiItemLine -Item $script:aiItemNormal -IsSelected $false `
+                    -ItemIndex 0 -ItemCount 10 -IndexNavigation -ContentWidth 46 -Chars $script:aiChars `
+                    -AbrdrCode $script:aiAbrdr -AitemCode $script:aiAitem -AselCode $script:aiAsel `
+                    -AhkCode $script:aiAhk -RstCode $script:aiRst
+                script:StripAnsiAI $line | Should -Match ' 1\. Foxtrot'
+            }
+        }
+
+        Context 'line structure' {
+
+            It 'starts and ends with the vertical border character' {
+                $line = Get-AnsiItemLine -Item $script:aiItemNormal -IsSelected $false `
+                    -ItemIndex 0 -ItemCount 3 -ContentWidth 46 -Chars $script:aiChars `
+                    -AbrdrCode $script:aiAbrdr -AitemCode $script:aiAitem -AselCode $script:aiAsel `
+                    -AhkCode $script:aiAhk -RstCode $script:aiRst
+                $plain = script:StripAnsiAI $line
+                $v = [regex]::Escape($script:aiChars.Vertical)
+                $plain | Should -Match "^$v.*$v$"
+            }
+        }
+    }
+
+    # ===========================================================================
+    # Write-AnsiNavUpdate -- partial nav redraw (cursor-position + 2-line update)
+    # ===========================================================================
+
+    Describe 'Write-AnsiNavUpdate' {
+
+        BeforeAll {
+            $script:navItems = @(
+                [PSCustomObject]@{ NodeType = 'FUNCTION'; Label = 'Alpha'; Description = $null; Hotkey = $null }
+                [PSCustomObject]@{ NodeType = 'FUNCTION'; Label = 'Bravo'; Description = $null; Hotkey = $null }
+                [PSCustomObject]@{ NodeType = 'EXIT';     Label = 'Exit';  Description = $null; Hotkey = $null }
+            )
+
+            $navProfile = [PSCustomObject]@{
+                UseUnicode  = $false; UseAnsi = $true; ColorMethod = 'Ansi'; Width = 80
+            }
+            $script:navChars = Get-CharacterSet -TerminalProfile $navProfile -Style 'ASCII'
+
+            function script:CaptureConsoleWrite {
+                param([scriptblock]$Action)
+                $sw = [System.IO.StringWriter]::new()
+                $old = [Console]::Out
+                [Console]::SetOut($sw)
+                try { & $Action }
+                finally { [Console]::SetOut($old) }
+                return $sw.ToString()
+            }
+        }
+
+        It 'writes cursor-position sequence for prev item row (no breadcrumb, item 0 -> row 5)' {
+            $output = script:CaptureConsoleWrite {
+                Write-AnsiNavUpdate -Items $script:navItems -PrevIdx 0 -NewIdx 1 `
+                    -Breadcrumb @() -InnerWidth 50 -Chars $script:navChars -Theme $script:theme
+            }
+            $output | Should -Match '\x1b\[5;1H'
+        }
+
+        It 'writes cursor-position sequence for new item row (no breadcrumb, item 1 -> row 6)' {
+            $output = script:CaptureConsoleWrite {
+                Write-AnsiNavUpdate -Items $script:navItems -PrevIdx 0 -NewIdx 1 `
+                    -Breadcrumb @() -InnerWidth 50 -Chars $script:navChars -Theme $script:theme
+            }
+            $output | Should -Match '\x1b\[6;1H'
+        }
+
+        It 'offsets item rows by 1 when breadcrumb is present (item 0 -> row 6, item 1 -> row 7)' {
+            $output = script:CaptureConsoleWrite {
+                Write-AnsiNavUpdate -Items $script:navItems -PrevIdx 0 -NewIdx 1 `
+                    -Breadcrumb @('Root') -InnerWidth 50 -Chars $script:navChars -Theme $script:theme
+            }
+            $output | Should -Match '\x1b\[6;1H'
+            $output | Should -Match '\x1b\[7;1H'
+        }
+
+        It 'prev item line is rendered without selector character adjacent to its label' {
+            $output = script:CaptureConsoleWrite {
+                Write-AnsiNavUpdate -Items $script:navItems -PrevIdx 0 -NewIdx 1 `
+                    -Breadcrumb @() -InnerWidth 50 -Chars $script:navChars -Theme $script:theme
+            }
+            # Strip all ANSI codes; selector and label land in the same flat string
+            $plain = $output -replace '\x1b\[[0-9;]*[a-zA-Z]', ''
+            $sel = [regex]::Escape($script:navChars.Selected)
+            $plain | Should -Not -Match "${sel}\s+Alpha"
+        }
+
+        It 'new item line is rendered with selector character adjacent to its label' {
+            $output = script:CaptureConsoleWrite {
+                Write-AnsiNavUpdate -Items $script:navItems -PrevIdx 0 -NewIdx 1 `
+                    -Breadcrumb @() -InnerWidth 50 -Chars $script:navChars -Theme $script:theme
+            }
+            $plain = $output -replace '\x1b\[[0-9;]*[a-zA-Z]', ''
+            $sel = [regex]::Escape($script:navChars.Selected)
+            $plain | Should -Match "${sel}\s+Bravo"
+        }
+    }
+
+    # ===========================================================================
+    # Clear-ConsoleSafe -- ANSI cursor-home vs [Console]::Clear()
+    # ===========================================================================
+
+    Describe 'Clear-ConsoleSafe' {
+
+        BeforeAll {
+            function script:CaptureConsoleWriteCSS {
+                param([scriptblock]$Action)
+                $sw = [System.IO.StringWriter]::new()
+                $old = [Console]::Out
+                [Console]::SetOut($sw)
+                try { & $Action }
+                finally { [Console]::SetOut($old) }
+                return $sw.ToString()
+            }
+        }
+
+        It 'writes ESC[H when TermProfile.UseAnsi is true' {
+            $ansiProfile = [PSCustomObject]@{ UseAnsi = $true; UseUnicode = $false; ColorMethod = 'Ansi'; Width = 80 }
+            $output = script:CaptureConsoleWriteCSS { Clear-ConsoleSafe -TermProfile $ansiProfile }
+            $output | Should -Match '\x1b\[H'
+        }
+
+        It 'does not write ESC[H when TermProfile.UseAnsi is false' {
+            $plainProfile = [PSCustomObject]@{ UseAnsi = $false; UseUnicode = $false; ColorMethod = 'WriteHost'; Width = 80 }
+            $output = script:CaptureConsoleWriteCSS { Clear-ConsoleSafe -TermProfile $plainProfile }
+            $output | Should -Not -Match '\x1b\[H'
+        }
+
+        It 'does not write ESC[H when TermProfile is omitted' {
+            $output = script:CaptureConsoleWriteCSS { Clear-ConsoleSafe }
+            $output | Should -Not -Match '\x1b\[H'
+        }
+    }
+
+    # ===========================================================================
+    # Show-MenuFrame -- partial navigation dispatch
+    # Verifies Write-AnsiNavUpdate is used on Up/Down for ANSI terminals with
+    # no description lines, and that full redraws still occur in all other cases.
+    # ===========================================================================
+
+    Describe 'Show-MenuFrame -- partial navigation dispatch' {
+
+        BeforeAll {
+            $script:ansiNavProfile = [PSCustomObject]@{
+                UseAnsi = $true; UseUnicode = $false; ColorMethod = 'Ansi'; Width = 80
+            }
+            $script:plainNavProfile = [PSCustomObject]@{
+                UseAnsi = $false; UseUnicode = $false; ColorMethod = 'WriteHost'; Width = 80
+            }
+
+            $script:noDescItems = @(
+                [PSCustomObject]@{ NodeType = 'FUNCTION'; Label = 'Alpha'; Description = $null; Hotkey = $null; Call = 'Invoke-Alpha'; Params = @{}; Confirm = $false; Before = @() }
+                [PSCustomObject]@{ NodeType = 'EXIT';     Label = 'Exit';  Description = $null; Hotkey = $null; Before = @() }
+            )
+
+            # First item has a description -- partial nav must not fire when leaving it
+            $script:withDescItems = @(
+                [PSCustomObject]@{ NodeType = 'FUNCTION'; Label = 'Alpha'; Description = 'Has detail'; Hotkey = $null; Call = 'Invoke-Alpha'; Params = @{}; Confirm = $false; Before = @() }
+                [PSCustomObject]@{ NodeType = 'EXIT';     Label = 'Exit';  Description = $null; Hotkey = $null; Before = @() }
+            )
+
+            Mock -CommandName 'Clear-ConsoleSafe'  -MockWith {}
+            Mock -CommandName 'Write-Host'         -MockWith {}
+        }
+
+        BeforeEach {
+            $script:YamlTUI_Quit = $false
+            $script:_pndCallCount = 0
+        }
+
+        It 'calls Write-AnsiNavUpdate once and Write-MenuFrame once on Down when ANSI and no descriptions' {
+            $menuData = [PSCustomObject]@{ Title = 'T'; Items = $script:noDescItems }
+            $keyDn = [System.ConsoleKeyInfo]::new([char]0, [System.ConsoleKey]::DownArrow, $false, $false, $false)
+            $keyQ  = [System.ConsoleKeyInfo]::new([char]'Q', [System.ConsoleKey]::Q, $false, $false, $false)
+            Mock -CommandName 'Read-ConsoleKey' -MockWith {
+                $script:_pndCallCount++
+                if ($script:_pndCallCount -eq 1) { return $keyDn }
+                return $keyQ
+            }
+            Mock -CommandName 'Write-MenuFrame'    -MockWith {}
+            Mock -CommandName 'Write-AnsiNavUpdate' -MockWith {}
+
+            Show-MenuFrame -MenuData $menuData -RootDir $TestDrive `
+                -TermProfile $script:ansiNavProfile -Chars $script:chars `
+                -KeyBindings $script:bindings -Theme $script:theme -IsRoot
+
+            Should -Invoke 'Write-AnsiNavUpdate' -Times 1 -Exactly
+            Should -Invoke 'Write-MenuFrame'     -Times 1 -Exactly
+        }
+
+        It 'never calls Write-AnsiNavUpdate on Down when TermProfile.UseAnsi is false' {
+            $menuData = [PSCustomObject]@{ Title = 'T'; Items = $script:noDescItems }
+            $keyDn = [System.ConsoleKeyInfo]::new([char]0, [System.ConsoleKey]::DownArrow, $false, $false, $false)
+            $keyQ  = [System.ConsoleKeyInfo]::new([char]'Q', [System.ConsoleKey]::Q, $false, $false, $false)
+            Mock -CommandName 'Read-ConsoleKey' -MockWith {
+                $script:_pndCallCount++
+                if ($script:_pndCallCount -eq 1) { return $keyDn }
+                return $keyQ
+            }
+            Mock -CommandName 'Write-MenuFrame'    -MockWith {}
+            Mock -CommandName 'Write-AnsiNavUpdate' -MockWith {}
+
+            Show-MenuFrame -MenuData $menuData -RootDir $TestDrive `
+                -TermProfile $script:plainNavProfile -Chars $script:chars `
+                -KeyBindings $script:bindings -Theme $script:theme -IsRoot
+
+            Should -Invoke 'Write-AnsiNavUpdate' -Times 0 -Exactly
+            Should -Invoke 'Write-MenuFrame'     -Times 2 -Exactly
+        }
+
+        It 'falls back to Write-MenuFrame on Down when the leaving item has a description' {
+            $menuData = [PSCustomObject]@{ Title = 'T'; Items = $script:withDescItems }
+            $keyDn = [System.ConsoleKeyInfo]::new([char]0, [System.ConsoleKey]::DownArrow, $false, $false, $false)
+            $keyQ  = [System.ConsoleKeyInfo]::new([char]'Q', [System.ConsoleKey]::Q, $false, $false, $false)
+            Mock -CommandName 'Read-ConsoleKey' -MockWith {
+                $script:_pndCallCount++
+                if ($script:_pndCallCount -eq 1) { return $keyDn }
+                return $keyQ
+            }
+            Mock -CommandName 'Write-MenuFrame'    -MockWith {}
+            Mock -CommandName 'Write-AnsiNavUpdate' -MockWith {}
+
+            Show-MenuFrame -MenuData $menuData -RootDir $TestDrive `
+                -TermProfile $script:ansiNavProfile -Chars $script:chars `
+                -KeyBindings $script:bindings -Theme $script:theme -IsRoot
+
+            Should -Invoke 'Write-AnsiNavUpdate' -Times 0 -Exactly
+            Should -Invoke 'Write-MenuFrame'     -Times 2 -Exactly
+        }
+    }
+
+    # ===========================================================================
     # Show-MenuFrame integration -- IndexNavigation passthrough (structural)
     # Verifies Write-MenuFrame is called with -IndexNavigation when set.
     # ===========================================================================

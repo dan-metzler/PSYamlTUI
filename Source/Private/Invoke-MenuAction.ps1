@@ -53,7 +53,7 @@ function Invoke-MenuAction {
             throw "Script not found: $scriptPath"
         }
 
-        & $scriptPath @splatParams
+        & $scriptPath @splatParams | Out-Default
 
     }
     elseif ($Node.NodeType -eq 'FUNCTION') {
@@ -64,7 +64,7 @@ function Invoke-MenuAction {
             throw "Function '$($Node.Call)' was not found. Ensure it is loaded in the current session before starting the menu."
         }
 
-        & $cmd @splatParams
+        & $cmd @splatParams | Out-Default
 
     }
     else {

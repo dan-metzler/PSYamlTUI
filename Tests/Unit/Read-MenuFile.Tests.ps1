@@ -619,4 +619,72 @@ menu:
       $result.Items[0].Before.Count | Should -Be 0
     }
   }
+
+  # ---------------------------------------------------------------------------
+  Describe 'Read-MenuFile - import cache' {
+  # ---------------------------------------------------------------------------
+
+    BeforeEach {
+      $script:YamlTUI_ImportCache = @{}
+    }
+
+    It 'populates YamlTUI_ImportCache with the imported file path after first parse' {
+      $subYaml = "items:`n  - label: CacheItem`n    exit: true"
+      Set-Content -Path (Join-Path -Path $TestDrive -ChildPath 'cache.sub.yaml') -Value $subYaml -Encoding UTF8
+      $rootYaml = @'
+menu:
+  title: "Cache Test"
+  items:
+    - label: "Branch"
+      import: "./cache.sub.yaml"
+    - label: "Exit"
+      exit: true
+'@
+      $path = New-TempMenuFile -Content $rootYaml -FileName 'cache.root.yaml'
+      Read-MenuFile -Path $path | Out-Null
+      $script:YamlTUI_ImportCache.Count | Should -Be 1
+    }
+
+    It 'produces one cache entry when the same file is imported twice in the same tree' {
+      $subYaml = "items:`n  - label: Shared`n    exit: true"
+      Set-Content -Path (Join-Path -Path $TestDrive -ChildPath 'shared.sub.yaml') -Value $subYaml -Encoding UTF8
+      $rootYaml = @'
+menu:
+  title: "Double Import"
+  items:
+    - label: "First"
+      import: "./shared.sub.yaml"
+    - label: "Second"
+      import: "./shared.sub.yaml"
+    - label: "Exit"
+      exit: true
+'@
+      $path = New-TempMenuFile -Content $rootYaml -FileName 'double.root.yaml'
+      $result = Read-MenuFile -Path $path
+      # Both branches resolved correctly from cache
+      $result.Items[0].Children[0].Label | Should -Be 'Shared'
+      $result.Items[1].Children[0].Label | Should -Be 'Shared'
+      # Only one cache entry despite two imports of the same file
+      $script:YamlTUI_ImportCache.Count | Should -Be 1
+    }
+
+    It 'cache entry holds the resolved PSCustomObject array for the imported file' {
+      $subYaml = "items:`n  - label: Cached`n    exit: true"
+      Set-Content -Path (Join-Path -Path $TestDrive -ChildPath 'typed.sub.yaml') -Value $subYaml -Encoding UTF8
+      $rootYaml = @'
+menu:
+  title: "T"
+  items:
+    - label: "Branch"
+      import: "./typed.sub.yaml"
+    - label: "Exit"
+      exit: true
+'@
+      $path = New-TempMenuFile -Content $rootYaml -FileName 'typed.root.yaml'
+      Read-MenuFile -Path $path | Out-Null
+      $cachedItems = $script:YamlTUI_ImportCache.Values | Select-Object -First 1
+      $cachedItems | Should -Not -BeNullOrEmpty
+      $cachedItems[0].Label | Should -Be 'Cached'
+    }
+  }
 }
