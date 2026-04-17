@@ -18,13 +18,23 @@ function Read-ConsoleKey {
 function Clear-ConsoleSafe {
     [CmdletBinding()]
     param(
-        [PSCustomObject]$TermProfile
+        [PSCustomObject]$TermProfile,
+        # When set, erase to end of screen after cursor-home. Required before script
+        # output or prompts -- the fixed-frame overwrite assumption does not hold there.
+        [switch]$Full
     )
 
     if ($null -ne $TermProfile -and $TermProfile.UseAnsi) {
-        # Cursor-home avoids the blank-flash that [Console]::Clear() causes.
-        # Build-AnsiFrame writes a fixed-height frame that fully overwrites the previous one.
-        [Console]::Write(([char]27) + '[H')
+        if ($Full) {
+            # Cursor-home + erase to end of screen: clears old frame borders without
+            # the visible blank-flash that [Console]::Clear() causes.
+            [Console]::Write(([char]27) + '[H' + ([char]27) + '[J')
+        }
+        else {
+            # Cursor-home only: Build-AnsiFrame + ESC[J] fully covers the previous
+            # frame, so no erase is needed for menu renders.
+            [Console]::Write(([char]27) + '[H')
+        }
         return
     }
 
@@ -247,7 +257,7 @@ function Show-MenuFrame {
                             if ($hookResult -eq $false) { $branchProceeds = $false }
                         }
                         catch {
-                            Clear-ConsoleSafe -TermProfile $TermProfile
+                            Clear-ConsoleSafe -TermProfile $TermProfile -Full
                             Write-Host ''
                             Write-Host "  Hook error: $_" -ForegroundColor Red
                             Write-Host ''
@@ -288,7 +298,7 @@ function Show-MenuFrame {
                             if ($hookResult -eq $false) { $proceed = $false }
                         }
                         catch {
-                            Clear-ConsoleSafe -TermProfile $TermProfile
+                            Clear-ConsoleSafe -TermProfile $TermProfile -Full
                             Write-Host ''
                             Write-Host "  Hook error: $_" -ForegroundColor Red
                             Write-Host ''
@@ -299,7 +309,7 @@ function Show-MenuFrame {
                     }
 
                     if ($proceed -and $sel.Confirm) {
-                        Clear-ConsoleSafe -TermProfile $TermProfile
+                        Clear-ConsoleSafe -TermProfile $TermProfile -Full
                         Write-Host ''
                         Write-Host "  Confirm: $($sel.Label)" -ForegroundColor $Theme.ItemSelected
                         if ($null -ne $sel.Description) {
@@ -313,7 +323,7 @@ function Show-MenuFrame {
                     }
 
                     if ($proceed) {
-                        Clear-ConsoleSafe -TermProfile $TermProfile
+                        Clear-ConsoleSafe -TermProfile $TermProfile -Full
                         if (-not [string]::IsNullOrEmpty($sel.Details)) {
                             Write-BorderedText -Title 'Running...' -Text "$($sel.Label)" -Details $sel.Details -TextColor $Theme.Title -BorderColor $Theme.Border -Chars $Chars
                         }
@@ -353,7 +363,7 @@ function Show-MenuFrame {
 
                         Write-Host ''
                         Write-Host '  Press any key to return to menu...' -ForegroundColor $Theme.FooterText
-                        while ([Console]::KeyAvailable) { $null = [Console]::ReadKey($true) }
+                        try { while ([Console]::KeyAvailable) { $null = [Console]::ReadKey($true) } } catch {}
                         $null = Read-ConsoleKey
                     }
                 }
@@ -538,6 +548,9 @@ function Write-MenuFrame {
             -Breadcrumb $Breadcrumb -InnerWidth $innerWidth -Chars $Chars -FooterText $footerText `
             -IndexNavigation:$IndexNavigation -StatusData $StatusData -Theme $Theme
         [Console]::Write($frame)
+        # Erase from cursor to end of screen -- clears leftover lines from a previously
+        # taller frame (e.g. description line removed) and any script output below the frame.
+        [Console]::Write("$([char]27)[J")
     }
     else {
         # Tier 1/2: build plain-text lines with color hints, then emit via Write-Host
@@ -718,7 +731,9 @@ function Build-AnsiFrame {
         "$CynCode$($CharSet.Vertical)$RstCode $StyledText$(' ' * $pad) $CynCode$($CharSet.Vertical)$RstCode"
     }
 
-    $nl = [System.Environment]::NewLine
+    # ESC[K (erase to end of line) before every newline clears any terminal content
+    # that sits to the right of the frame when the window is wider than the frame.
+    $nl = "${esc}[K$([System.Environment]::NewLine)"
     $cw = $InnerWidth - 2
 
     # -- Top border -------------------------------------------------------------
@@ -837,7 +852,7 @@ function Write-AnsiNavUpdate {
             -ItemIndex $updateIdx -ItemCount $Items.Count `
             -ContentWidth $cw -Chars $Chars `
             -AbrdrCode $abrdr -AitemCode $aitem -AselCode $asel -AhkCode $ahk -RstCode $rst
-        $null = $sb.Append("${esc}[$ansiRow;1H$line")
+        $null = $sb.Append("${esc}[$ansiRow;1H$line${esc}[K")
     }
 
     [Console]::Write($sb.ToString())
