@@ -26,14 +26,16 @@ function Clear-ConsoleSafe {
 
     if ($null -ne $TermProfile -and $TermProfile.UseAnsi) {
         if ($Full) {
-            # Cursor-home + erase to end of screen: clears old frame borders without
-            # the visible blank-flash that [Console]::Clear() causes.
-            [Console]::Write(([char]27) + '[H' + ([char]27) + '[J')
+            # Scrollback clear + cursor-home + erase to end of screen.
+            # ESC[3J clears the scrollback buffer so previous script output does not
+            # remain visible above the menu frame. Silently ignored by terminals that
+            # do not support it, so no regression on older hosts.
+            [Console]::Write(([char]27) + '[3J' + ([char]27) + '[H' + ([char]27) + '[J')
         }
         else {
-            # Cursor-home only: Build-AnsiFrame + ESC[J] fully covers the previous
-            # frame, so no erase is needed for menu renders.
-            [Console]::Write(([char]27) + '[H')
+            # Scrollback clear + cursor-home. Build-AnsiFrame + ESC[J] covers the
+            # current viewport; ESC[3J prevents prior output showing above the frame.
+            [Console]::Write(([char]27) + '[3J' + ([char]27) + '[H')
         }
         return
     }
