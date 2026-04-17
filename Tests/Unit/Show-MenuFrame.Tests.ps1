@@ -512,6 +512,16 @@ InModuleScope PSYamlTUI {
                 $plain | Should -Not -Match 'Deploy the application'
             }
         }
+
+        Context 'ESC[K erase-to-end-of-line per frame line' {
+
+            It 'frame output contains ESC[K sequences to prevent content bleed past right border' {
+                $frame = Build-AnsiFrame -Title 'Menu' -Items $script:items3 -SelectedIndex 0 `
+                    -Breadcrumb @() -InnerWidth 50 -Chars $script:chars -FooterText 'footer' `
+                    -Theme $script:theme
+                $frame | Should -Match '\x1b\[K'
+            }
+        }
     }
 
     # ===========================================================================
@@ -914,6 +924,20 @@ InModuleScope PSYamlTUI {
             $output = script:CaptureConsoleWriteCSS { Clear-ConsoleSafe }
             $output | Should -Not -Match '\x1b\[H'
         }
+
+        It 'writes ESC[J after ESC[H when -Full is set on an ANSI terminal' {
+            $ansiProfile = [PSCustomObject]@{ UseAnsi = $true; UseUnicode = $false; ColorMethod = 'Ansi'; Width = 80 }
+            $output = script:CaptureConsoleWriteCSS { Clear-ConsoleSafe -TermProfile $ansiProfile -Full }
+            $output | Should -Match '\x1b\[H'
+            $output | Should -Match '\x1b\[J'
+        }
+
+        It 'does not write ESC[J when -Full is not set on an ANSI terminal' {
+            $ansiProfile = [PSCustomObject]@{ UseAnsi = $true; UseUnicode = $false; ColorMethod = 'Ansi'; Width = 80 }
+            $output = script:CaptureConsoleWriteCSS { Clear-ConsoleSafe -TermProfile $ansiProfile }
+            $output | Should -Match '\x1b\[H'
+            $output | Should -Not -Match '\x1b\[J'
+        }
     }
 
     # ===========================================================================
@@ -1141,6 +1165,58 @@ InModuleScope PSYamlTUI {
                 -IndexNavigation
 
             $script:YamlTUI_Quit | Should -BeTrue
+        }
+    }
+
+    # ===========================================================================
+    # Show-MenuFrame -- Clear-ConsoleSafe called with -Full before leaf execution
+    # Regression for: old frame borders mixing with script output when a command runs.
+    # Root cause: Clear-ConsoleSafe without -Full writes ESC[H only (cursor-home),
+    # leaving old frame content below the new output. Fix: -Full adds ESC[J (erase
+    # to end of screen) so old borders are erased before script output appears.
+    # ===========================================================================
+
+    Describe 'Show-MenuFrame -- Clear-ConsoleSafe -Full on action execution' {
+
+        BeforeAll {
+            $script:actionTermProfile = [PSCustomObject]@{
+                UseUnicode  = $false
+                UseAnsi     = $false
+                ColorMethod = 'WriteHost'
+                Width       = 80
+            }
+            Mock -CommandName 'Write-MenuFrame'    -MockWith {}
+            Mock -CommandName 'Write-BorderedText' -MockWith {}
+            Mock -CommandName 'Write-Host'         -MockWith {}
+            Mock -CommandName 'Invoke-MenuAction'  -MockWith {}
+        }
+
+        BeforeEach {
+            $script:YamlTUI_Quit = $false
+            $script:_actionFullCount = 0
+        }
+
+        It 'calls Clear-ConsoleSafe with -Full when a leaf FUNCTION item is executed' {
+            $funcItem = [PSCustomObject]@{
+                NodeType = 'FUNCTION'; Label = 'Alpha'; Description = $null; Hotkey = $null
+                Call = 'Invoke-Alpha'; Params = @{}; Confirm = $false; Before = @()
+            }
+            $menuData = [PSCustomObject]@{ Title = 'T'; Items = @($funcItem) }
+
+            $keyEnter = [System.ConsoleKeyInfo]::new([char]0, [System.ConsoleKey]::Enter, $false, $false, $false)
+            $keyQ     = [System.ConsoleKeyInfo]::new([char]'Q', [System.ConsoleKey]::Q, $false, $false, $false)
+            Mock -CommandName 'Read-ConsoleKey' -MockWith {
+                $script:_actionFullCount++
+                if ($script:_actionFullCount -eq 1) { return $keyEnter }
+                return $keyQ
+            }
+            Mock -CommandName 'Clear-ConsoleSafe' -MockWith {}
+
+            Show-MenuFrame -MenuData $menuData -RootDir $TestDrive `
+                -TermProfile $script:actionTermProfile -Chars $script:chars `
+                -KeyBindings $script:bindings -Theme $script:theme -IsRoot
+
+            Should -Invoke 'Clear-ConsoleSafe' -ParameterFilter { $Full -eq $true } -Times 1 -Exactly
         }
     }
 }
