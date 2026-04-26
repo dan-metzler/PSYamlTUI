@@ -129,19 +129,30 @@ function Show-MenuFrame {
     $partialNavNew  = -1
     $innerWidth = [Math]::Max(38, [Math]::Min($TermProfile.Width - 4, 96))
 
+    # Pre-compute footer text -- key bindings never change mid-session
+    $footerText = Get-FooterText -Bindings $KeyBindings -IndexNavigation:$IndexNavigation
+
+    # Pre-build hotkey index -- O(1) lookup per keypress instead of O(N) scan
+    $hotkeyMap = @{}
+    for ($hi = 0; $hi -lt $items.Count; $hi++) {
+        if ($null -ne $items[$hi].Hotkey) {
+            $hotkeyMap[$items[$hi].Hotkey.ToUpperInvariant()] = $hi
+        }
+    }
+
     while ($running) {
         # Home signal: at root we stay and re-render; elsewhere we bubble up
         if ($IsRoot -and $script:YamlTUI_Home) { $script:YamlTUI_Home = $false }
 
         if ($partialNavPrev -ge 0) {
             Write-AnsiNavUpdate -Items $items -PrevIdx $partialNavPrev -NewIdx $partialNavNew `
-                -Breadcrumb $Breadcrumb -InnerWidth $innerWidth -Chars $Chars -Theme $Theme
+                -Breadcrumb $Breadcrumb -InnerWidth $innerWidth -Chars $Chars
             $partialNavPrev = -1
             $partialNavNew  = -1
         }
         else {
             Write-MenuFrame -Title $title -Items $items -SelectedIndex $idx `
-                -Breadcrumb $Breadcrumb -TermProfile $TermProfile -Chars $Chars -KeyBindings $KeyBindings `
+                -Breadcrumb $Breadcrumb -TermProfile $TermProfile -Chars $Chars -FooterText $footerText `
                 -IndexNavigation:$IndexNavigation -StatusData $StatusData -Theme $Theme
         }
 
@@ -389,17 +400,13 @@ function Show-MenuFrame {
                 }
             }
             default {
-                # Check item-defined hotkeys (case-insensitive).
+                # Check item-defined hotkeys via pre-built map (O(1) vs O(N) scan).
                 # Resolve-KeyAction returns $null for unrecognised keys, which
-                # falls through to here — so this also runs for unbound keys.
+                # falls through to here -- so this also runs for unbound keys.
                 $ch = [string]$key.KeyChar
                 if ($ch -ne '') {
-                    for ($i = 0; $i -lt $items.Count; $i++) {
-                        if ($null -ne $items[$i].Hotkey -and $items[$i].Hotkey -ieq $ch) {
-                            $idx = $i
-                            break
-                        }
-                    }
+                    $hotkeyIdx = $hotkeyMap[$ch.ToUpperInvariant()]
+                    if ($null -ne $hotkeyIdx) { $idx = $hotkeyIdx }
                 }
             }
         }
@@ -448,7 +455,7 @@ function Assert-KeyBindings {
             }
 
             # Build normalised key label for duplicate check
-            $norm = if ($c -is [System.ConsoleKey]) { $c.ToString().ToUpper() } else { ([string]$c).ToUpper() }
+            $norm = if ($c -is [System.ConsoleKey]) { $c.ToString().ToUpperInvariant() } else { ([string]$c).ToUpperInvariant() }
 
             if ($seen.ContainsKey($norm)) {
                 throw "KeyBindings: Key '$norm' is assigned to both '$($seen[$norm])' and '$actionName'. Each key may only be bound to one action."
@@ -525,7 +532,7 @@ function Write-MenuFrame {
         [string[]]$Breadcrumb,
         [PSCustomObject]$TermProfile,
         [hashtable]$Chars,
-        [hashtable]$KeyBindings = @{},
+        [string]$FooterText = '',
 
         [Parameter()]
         [hashtable]$StatusData,
@@ -540,15 +547,13 @@ function Write-MenuFrame {
     # Cap to avoid overflow; ensure a sensible minimum.
     $innerWidth = [Math]::Max(38, [Math]::Min($TermProfile.Width - 4, 96))
 
-    $footerText = Get-FooterText -Bindings $KeyBindings -IndexNavigation:$IndexNavigation
-
     Clear-ConsoleSafe -TermProfile $TermProfile
 
     if ($TermProfile.UseAnsi) {
         # Tier 3: build complete ANSI frame string, write in one call
         $frame = Build-AnsiFrame -Title $Title -Items $Items -SelectedIndex $SelectedIndex `
             -Breadcrumb $Breadcrumb -InnerWidth $innerWidth -Chars $Chars -FooterText $footerText `
-            -IndexNavigation:$IndexNavigation -StatusData $StatusData -Theme $Theme
+            -IndexNavigation:$IndexNavigation -StatusData $StatusData
         [Console]::Write($frame)
         # Erase from cursor to end of screen -- clears leftover lines from a previously
         # taller frame (e.g. description line removed) and any script output below the frame.
@@ -657,12 +662,12 @@ function Get-AnsiItemLine {
 
     $suffixVis = ''
     if ($Item.NodeType -eq 'BRANCH') { $suffixVis += " $($Chars.Arrow)" }
-    if (-not $IndexNavigation -and $null -ne $Item.Hotkey) { $suffixVis += " [$($Item.Hotkey.ToUpper())]" }
+    if (-not $IndexNavigation -and $null -ne $Item.Hotkey) { $suffixVis += " [$($Item.Hotkey.ToUpperInvariant())]" }
 
     if ($IndexNavigation) {
         $indexPrefixLen = if ($ItemCount -ge 10) { 4 } else { 3 }
         $indexPrefix    = if ($ItemCount -ge 10) { "$($ItemIndex + 1). ".PadLeft(4) } else { "$($ItemIndex + 1). " }
-        $maxLabelLen    = $ContentWidth - $indexPrefixLen - $suffixVis.Length
+        $maxLabelLen    = [Math]::Max(0, $ContentWidth - $indexPrefixLen - $suffixVis.Length)
         $labelVis       = Get-TruncatedLabel -Text $Item.Label -MaxLen $maxLabelLen
         $itemVisRaw     = "$indexPrefix$labelVis$suffixVis"
         $styledSuffix   = if ($suffixVis -ne '') { "$AhkCode$suffixVis$RstCode" } else { '' }
@@ -670,7 +675,7 @@ function Get-AnsiItemLine {
     }
     else {
         $selector    = if ($IsSelected) { $Chars.Selected } else { ' ' }
-        $maxLabelLen = $ContentWidth - 2 - $suffixVis.Length
+        $maxLabelLen = [Math]::Max(0, $ContentWidth - 2 - $suffixVis.Length)
         $labelVis    = Get-TruncatedLabel -Text $Item.Label -MaxLen $maxLabelLen
         $itemVisRaw  = "$selector $labelVis$suffixVis"
 
@@ -702,26 +707,21 @@ function Build-AnsiFrame {
         [Parameter()]
         [hashtable]$StatusData,
 
-        [Parameter(Mandatory)]
-        [hashtable]$Theme,
-
         [switch]$IndexNavigation
     )
 
-    $esc = [char]27
-    $rst = "${esc}[0m"
-
-    # Resolve theme colors to ANSI codes once -- Title and ItemSelected get bold for emphasis
-    $abrdr = Get-AnsiCode -Color $Theme.Border          -Esc $esc
-    $atitle = Get-AnsiCode -Color $Theme.Title           -Esc $esc -Bold
-    $acrumb = Get-AnsiCode -Color $Theme.Breadcrumb      -Esc $esc
-    $aitem = Get-AnsiCode -Color $Theme.ItemDefault     -Esc $esc
-    $asel = Get-AnsiCode -Color $Theme.ItemSelected    -Esc $esc -Bold
-    $ahk = Get-AnsiCode -Color $Theme.ItemHotkey      -Esc $esc
-    $adesc = Get-AnsiCode -Color $Theme.ItemDescription -Esc $esc
-    $aslbl = Get-AnsiCode -Color $Theme.StatusLabel     -Esc $esc
-    $asval = Get-AnsiCode -Color $Theme.StatusValue     -Esc $esc
-    $aftr = Get-AnsiCode -Color $Theme.FooterText      -Esc $esc
+    $esc    = [char]27
+    $rst    = $script:YamlTUI_AnsiCodes.Reset
+    $abrdr  = $script:YamlTUI_AnsiCodes.Border
+    $atitle = $script:YamlTUI_AnsiCodes.Title
+    $acrumb = $script:YamlTUI_AnsiCodes.Breadcrumb
+    $aitem  = $script:YamlTUI_AnsiCodes.ItemDefault
+    $asel   = $script:YamlTUI_AnsiCodes.ItemSelected
+    $ahk    = $script:YamlTUI_AnsiCodes.ItemHotkey
+    $adesc  = $script:YamlTUI_AnsiCodes.ItemDescription
+    $aslbl  = $script:YamlTUI_AnsiCodes.StatusLabel
+    $asval  = $script:YamlTUI_AnsiCodes.StatusValue
+    $aftr   = $script:YamlTUI_AnsiCodes.FooterText
 
     $sb = [System.Text.StringBuilder]::new()
 
@@ -827,19 +827,15 @@ function Write-AnsiNavUpdate {
         [int]$NewIdx,
         [string[]]$Breadcrumb,
         [int]$InnerWidth,
-        [hashtable]$Chars,
-
-        [Parameter(Mandatory)]
-        [hashtable]$Theme
+        [hashtable]$Chars
     )
 
-    $esc = [char]27
-    $rst = "${esc}[0m"
-
-    $abrdr = Get-AnsiCode -Color $Theme.Border       -Esc $esc
-    $aitem = Get-AnsiCode -Color $Theme.ItemDefault  -Esc $esc
-    $asel  = Get-AnsiCode -Color $Theme.ItemSelected -Esc $esc -Bold
-    $ahk   = Get-AnsiCode -Color $Theme.ItemHotkey   -Esc $esc
+    $esc   = [char]27
+    $rst   = $script:YamlTUI_AnsiCodes.Reset
+    $abrdr = $script:YamlTUI_AnsiCodes.Border
+    $aitem = $script:YamlTUI_AnsiCodes.ItemDefault
+    $asel  = $script:YamlTUI_AnsiCodes.ItemSelected
+    $ahk   = $script:YamlTUI_AnsiCodes.ItemHotkey
 
     $cw = $InnerWidth - 2
     # Lines before first item: top-border + title + [breadcrumb] + separator + empty-line
@@ -929,6 +925,10 @@ function Build-HostLines {
     # Empty line
     $lines.Add((& $mkLine '' $null $cw $Chars $cBorder))
 
+    # Index prefix constants -- invariant across the loop, computed once
+    $indexIsWide    = $IndexNavigation -and ($Items.Count -ge 10)
+    $indexPrefixLen = if ($IndexNavigation) { if ($indexIsWide) { 4 } else { 3 } } else { 0 }
+
     # Items
     for ($i = 0; $i -lt $Items.Count; $i++) {
         $item = $Items[$i]
@@ -937,17 +937,16 @@ function Build-HostLines {
         $selector = if ($isSelected) { $Chars.Selected } else { ' ' }
         $suffixVis = ''
         if ($item.NodeType -eq 'BRANCH') { $suffixVis += " $($Chars.Arrow)" }
-        if (-not $IndexNavigation -and $null -ne $item.Hotkey) { $suffixVis += " [$($item.Hotkey.ToUpper())]" }
+        if (-not $IndexNavigation -and $null -ne $item.Hotkey) { $suffixVis += " [$($item.Hotkey.ToUpperInvariant())]" }
 
         if ($IndexNavigation) {
-            $indexPrefixLen = if ($Items.Count -ge 10) { 4 } else { 3 }
-            $indexPrefix = if ($Items.Count -ge 10) { "$($i+1). ".PadLeft(4) } else { "$($i+1). " }
-            $maxLabelLen = $cw - $indexPrefixLen - $suffixVis.Length
+            $indexPrefix = if ($indexIsWide) { "$($i+1). ".PadLeft(4) } else { "$($i+1). " }
+            $maxLabelLen = [Math]::Max(0, $cw - $indexPrefixLen - $suffixVis.Length)
             $labelVis = Get-TruncatedLabel -Text $item.Label -MaxLen $maxLabelLen
             $lineText = "$indexPrefix$labelVis$suffixVis"
         }
         else {
-            $maxLabelLen = $cw - 2 - $suffixVis.Length
+            $maxLabelLen = [Math]::Max(0, $cw - 2 - $suffixVis.Length)
             $labelVis = Get-TruncatedLabel -Text $item.Label -MaxLen $maxLabelLen
             $lineText = "$selector $labelVis$suffixVis"
         }
@@ -1116,7 +1115,7 @@ function Write-BorderedText {
     function Write-ContentLine {
         param([string]$Line, [int]$InnerWidth, $LineColor)
         $visLen = ($Line -replace '\x1b\[[0-9;]*m', '').Length
-        $padRight = $InnerWidth - 2 - $visLen
+        $padRight = [Math]::Max(0, $InnerWidth - 2 - $visLen)
         $left = $Chars.Vertical + ' '
         $right = (' ' * $padRight) + ' ' + $Chars.Vertical
         if ($null -ne $cBorder) { Write-Host -Object $left  -NoNewline -ForegroundColor $cBorder } else { Write-Host -Object $left  -NoNewline }

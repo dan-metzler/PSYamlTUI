@@ -64,9 +64,14 @@ function Read-MenuFile {
         }
     }
     if ($tokens.Count -gt 0) {
-        foreach ($k in $tokens.Keys) {
-            $content = $content.Replace("{{$k}}", [string]$tokens[$k])
-        }
+        # Single regex pass replaces all tokens at once instead of N full-file scans.
+        # Unknown tokens are left as-is per the module contract.
+        $content = [regex]::Replace($content, '\{\{([^{}\s]+)\}\}', [System.Text.RegularExpressions.MatchEvaluator]{
+            param([System.Text.RegularExpressions.Match]$m)
+            $key = $m.Groups[1].Value
+            if ($tokens.ContainsKey($key)) { return [string]$tokens[$key] }
+            return $m.Value
+        })
     }
 
     $raw = ConvertFrom-YamlText -Content $content
@@ -224,7 +229,9 @@ function Resolve-MenuItems {
             $fullImportPath = [System.IO.Path]::GetFullPath(
                 [System.IO.Path]::Combine($RootDir, $importRelPath)
             )
-            if (-not $fullImportPath.StartsWith($RootDir, [System.StringComparison]::OrdinalIgnoreCase)) {
+            # Append separator before comparing so "C:\root" does not match "C:\root_other\file.yaml".
+            $importRootPrefix = if ($RootDir.EndsWith([System.IO.Path]::DirectorySeparatorChar)) { $RootDir } else { $RootDir + [System.IO.Path]::DirectorySeparatorChar }
+            if (-not $fullImportPath.StartsWith($importRootPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
                 throw "Item '$label': 'import' path escapes the root directory: $importRelPath"
             }
             if (-not (Test-Path -LiteralPath $fullImportPath)) {
@@ -238,9 +245,12 @@ function Resolve-MenuItems {
                 $importedContent = Get-Content -LiteralPath $fullImportPath -Raw -Encoding UTF8
                 # Apply the same token substitution pass to imported file content
                 if ($Tokens.Count -gt 0) {
-                    foreach ($tk in $Tokens.Keys) {
-                        $importedContent = $importedContent.Replace("{{$tk}}", [string]$Tokens[$tk])
-                    }
+                    $importedContent = [regex]::Replace($importedContent, '\{\{([^{}\s]+)\}\}', [System.Text.RegularExpressions.MatchEvaluator]{
+                        param([System.Text.RegularExpressions.Match]$m)
+                        $key = $m.Groups[1].Value
+                        if ($Tokens.ContainsKey($key)) { return [string]$Tokens[$key] }
+                        return $m.Value
+                    })
                 }
                 $importedRaw = ConvertFrom-YamlText -Content $importedContent
 

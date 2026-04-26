@@ -127,6 +127,24 @@ function Start-Menu {
         $script:YamlTUI_Theme = Get-ColorTheme -Theme $Theme
     }
 
+    # Pre-compute ANSI escape codes for all theme colors once per session.
+    # Build-AnsiFrame and Write-AnsiNavUpdate read from this cache instead of
+    # calling Get-AnsiCode (switch lookup) on every keystroke.
+    $_esc = [char]27
+    $script:YamlTUI_AnsiCodes = @{
+        Border          = Get-AnsiCode -Color $script:YamlTUI_Theme.Border          -Esc $_esc
+        Title           = Get-AnsiCode -Color $script:YamlTUI_Theme.Title           -Esc $_esc -Bold
+        Breadcrumb      = Get-AnsiCode -Color $script:YamlTUI_Theme.Breadcrumb      -Esc $_esc
+        ItemDefault     = Get-AnsiCode -Color $script:YamlTUI_Theme.ItemDefault     -Esc $_esc
+        ItemSelected    = Get-AnsiCode -Color $script:YamlTUI_Theme.ItemSelected    -Esc $_esc -Bold
+        ItemHotkey      = Get-AnsiCode -Color $script:YamlTUI_Theme.ItemHotkey      -Esc $_esc
+        ItemDescription = Get-AnsiCode -Color $script:YamlTUI_Theme.ItemDescription -Esc $_esc
+        StatusLabel     = Get-AnsiCode -Color $script:YamlTUI_Theme.StatusLabel     -Esc $_esc
+        StatusValue     = Get-AnsiCode -Color $script:YamlTUI_Theme.StatusValue     -Esc $_esc
+        FooterText      = Get-AnsiCode -Color $script:YamlTUI_Theme.FooterText      -Esc $_esc
+        Reset           = "${_esc}[0m"
+    }
+
     # -- Navigation signal flags ------------------------------------------------
     # These propagate Quit and Home events up through the recursion tree
     $script:YamlTUI_Quit = $false
