@@ -155,6 +155,16 @@ $global:InvokeMenuAction_Param_Flag = $Flag
                 Should -Throw -ExpectedMessage '*Security*'
             }
 
+            It 'throws when script path is in a sibling directory whose name starts with the root dir name' {
+                # e.g. RootDir = C:\root, path = C:\root_sibling\evil.ps1
+                # The old StartsWith check would pass; the separator-aware check correctly rejects it.
+                $sep  = [System.IO.Path]::DirectorySeparatorChar
+                $sibling = $script:RootDir.TrimEnd($sep) + '_sibling' + $sep + 'evil.ps1'
+                $node = New-ScriptNode -Call $sibling
+                { Invoke-MenuAction -Node $node -RootDir $script:RootDir } |
+                Should -Throw -ExpectedMessage '*Security*'
+            }
+
             It 'root jail error message mentions the original call value' {
                 $node = New-ScriptNode -Call '../../escape.ps1'
                 try {

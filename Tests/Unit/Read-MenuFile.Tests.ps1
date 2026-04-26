@@ -355,6 +355,26 @@ menu:
       { Read-MenuFile -Path $path } | Should -Throw
     }
 
+    It 'throws when import: resolves to a sibling directory whose name starts with the root dir name' {
+      # RootDir = TestDrive\root -- import "../root_sibling/sub.yaml" resolves to
+      # TestDrive\root_sibling\sub.yaml, which starts with "root" as a string prefix
+      # but is NOT inside the root directory. The separator-aware check must reject it.
+      $rootDir = Join-Path -Path $TestDrive -ChildPath 'sib-root'
+      $null = New-Item -ItemType Directory -Path $rootDir -Force
+      $yaml = @'
+menu:
+  title: "T"
+  items:
+    - label: "SiblingImport"
+      import: "../sib-root_other/sub.yaml"
+    - label: "Exit"
+      exit: true
+'@
+      $menuPath = Join-Path -Path $rootDir -ChildPath 'sib.menu.yaml'
+      Set-Content -Path $menuPath -Value $yaml -Encoding UTF8
+      { Read-MenuFile -Path $menuPath } | Should -Throw -ExpectedMessage '*escapes*'
+    }
+
     It 'throws when call: contains a pipe character' {
       $yaml = @'
 menu:

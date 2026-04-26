@@ -47,6 +47,23 @@ InModuleScope PSYamlTUI {
             FooterText      = 'DarkGray'
         }
 
+        # Populate the module-scope ANSI code cache that Build-AnsiFrame and
+        # Write-AnsiNavUpdate read from -- normally set by Start-Menu.
+        $_tEsc = [char]27
+        $script:YamlTUI_AnsiCodes = @{
+            Border          = Get-AnsiCode -Color $script:theme.Border          -Esc $_tEsc
+            Title           = Get-AnsiCode -Color $script:theme.Title           -Esc $_tEsc -Bold
+            Breadcrumb      = Get-AnsiCode -Color $script:theme.Breadcrumb      -Esc $_tEsc
+            ItemDefault     = Get-AnsiCode -Color $script:theme.ItemDefault     -Esc $_tEsc
+            ItemSelected    = Get-AnsiCode -Color $script:theme.ItemSelected    -Esc $_tEsc -Bold
+            ItemHotkey      = Get-AnsiCode -Color $script:theme.ItemHotkey      -Esc $_tEsc
+            ItemDescription = Get-AnsiCode -Color $script:theme.ItemDescription -Esc $_tEsc
+            StatusLabel     = Get-AnsiCode -Color $script:theme.StatusLabel     -Esc $_tEsc
+            StatusValue     = Get-AnsiCode -Color $script:theme.StatusValue     -Esc $_tEsc
+            FooterText      = Get-AnsiCode -Color $script:theme.FooterText      -Esc $_tEsc
+            Reset           = "${_tEsc}[0m"
+        }
+
         # A small (< 10 item) item list used by most tests
         $script:items3 = @(
             [PSCustomObject]@{ NodeType = 'FUNCTION'; Label = 'Alpha'; Description = $null; Hotkey = $null; Call = 'Invoke-Alpha'; Params = @{}; Confirm = $false; Before = @() }
@@ -384,8 +401,7 @@ InModuleScope PSYamlTUI {
 
             It 'frame output does not contain digit-dot prefixes on items' {
                 $frame = Build-AnsiFrame -Title 'Menu' -Items $script:items3 -SelectedIndex 0 `
-                    -Breadcrumb @() -InnerWidth 50 -Chars $script:chars -FooterText 'footer' `
-                    -Theme $script:theme
+                    -Breadcrumb @() -InnerWidth 50 -Chars $script:chars -FooterText 'footer'
 
                 $plain = script:Remove-AnsiEscapes $frame
                 # "1. Alpha" or "1.Alpha" should not appear; selector + space should
@@ -395,8 +411,7 @@ InModuleScope PSYamlTUI {
             It 'frame output contains Navigate in default footer' {
                 $frame = Build-AnsiFrame -Title 'Menu' -Items $script:items3 -SelectedIndex 0 `
                     -Breadcrumb @() -InnerWidth 50 -Chars $script:chars `
-                    -FooterText '[Up/Dn] Navigate  [Enter] Select  [Esc] Back  [H] Home  [Q] Quit' `
-                    -Theme $script:theme
+                    -FooterText '[Up/Dn] Navigate  [Enter] Select  [Esc] Back  [H] Home  [Q] Quit'
 
                 $plain = script:Remove-AnsiEscapes $frame
                 $plain | Should -Match 'Navigate'
@@ -404,8 +419,7 @@ InModuleScope PSYamlTUI {
 
             It 'hotkey suffix is rendered in frame output in keybinding mode' {
                 $frame = Build-AnsiFrame -Title 'Menu' -Items $script:itemsWithHotkey -SelectedIndex 0 `
-                    -Breadcrumb @() -InnerWidth 50 -Chars $script:chars -FooterText 'footer' `
-                    -Theme $script:theme
+                    -Breadcrumb @() -InnerWidth 50 -Chars $script:chars -FooterText 'footer'
 
                 $plain = script:Remove-AnsiEscapes $frame
                 $plain | Should -Match '\[R\]'
@@ -413,8 +427,7 @@ InModuleScope PSYamlTUI {
 
             It 'description is rendered for selected item in frame output in keybinding mode' {
                 $frame = Build-AnsiFrame -Title 'Menu' -Items $script:itemsWithDesc -SelectedIndex 0 `
-                    -Breadcrumb @() -InnerWidth 60 -Chars $script:chars -FooterText 'footer' `
-                    -Theme $script:theme
+                    -Breadcrumb @() -InnerWidth 60 -Chars $script:chars -FooterText 'footer'
 
                 $plain = script:Remove-AnsiEscapes $frame
                 $plain | Should -Match 'Deploy the application'
@@ -426,7 +439,7 @@ InModuleScope PSYamlTUI {
             It 'item 1 is prefixed with digit in frame output' {
                 $frame = Build-AnsiFrame -Title 'Menu' -Items $script:items3 -SelectedIndex 0 `
                     -Breadcrumb @() -InnerWidth 50 -Chars $script:chars -FooterText 'footer' `
-                    -Theme $script:theme -IndexNavigation
+                    -IndexNavigation
 
                 $plain = script:Remove-AnsiEscapes $frame
                 $plain | Should -Match '1\. Alpha'
@@ -435,7 +448,7 @@ InModuleScope PSYamlTUI {
             It 'item 2 is prefixed with "2. " in frame output' {
                 $frame = Build-AnsiFrame -Title 'Menu' -Items $script:items3 -SelectedIndex 0 `
                     -Breadcrumb @() -InnerWidth 50 -Chars $script:chars -FooterText 'footer' `
-                    -Theme $script:theme -IndexNavigation
+                    -IndexNavigation
 
                 $plain = script:Remove-AnsiEscapes $frame
                 $plain | Should -Match '2\. Bravo'
@@ -444,7 +457,7 @@ InModuleScope PSYamlTUI {
             It 'item 3 is prefixed with "3. " in frame output' {
                 $frame = Build-AnsiFrame -Title 'Menu' -Items $script:items3 -SelectedIndex 0 `
                     -Breadcrumb @() -InnerWidth 50 -Chars $script:chars -FooterText 'footer' `
-                    -Theme $script:theme -IndexNavigation
+                    -IndexNavigation
 
                 $plain = script:Remove-AnsiEscapes $frame
                 $plain | Should -Match '3\. Exit'
@@ -453,7 +466,7 @@ InModuleScope PSYamlTUI {
             It 'selector glyph is not present in item lines in index mode' {
                 $frame = Build-AnsiFrame -Title 'Menu' -Items $script:items3 -SelectedIndex 0 `
                     -Breadcrumb @() -InnerWidth 50 -Chars $script:chars -FooterText 'footer' `
-                    -Theme $script:theme -IndexNavigation
+                    -IndexNavigation
 
                 $plain = script:Remove-AnsiEscapes $frame
                 # The Selected char should not appear in the lines that have digit prefixes
@@ -468,7 +481,7 @@ InModuleScope PSYamlTUI {
                 $idxFooter = '[Esc] Back  [H] Home  [Q] Quit'
                 $frame = Build-AnsiFrame -Title 'Menu' -Items $script:items3 -SelectedIndex 0 `
                     -Breadcrumb @() -InnerWidth 50 -Chars $script:chars -FooterText $idxFooter `
-                    -Theme $script:theme -IndexNavigation
+                    -IndexNavigation
 
                 $plain = script:Remove-AnsiEscapes $frame
                 $plain | Should -Match 'Back'
@@ -478,7 +491,7 @@ InModuleScope PSYamlTUI {
             It 'item 10 uses 4-char prefix in 10-item list' {
                 $frame = Build-AnsiFrame -Title 'Menu' -Items $script:items10 -SelectedIndex 9 `
                     -Breadcrumb @() -InnerWidth 60 -Chars $script:chars -FooterText 'footer' `
-                    -Theme $script:theme -IndexNavigation
+                    -IndexNavigation
 
                 $plain = script:Remove-AnsiEscapes $frame
                 $plain | Should -Match '10\. Item 10'
@@ -487,7 +500,7 @@ InModuleScope PSYamlTUI {
             It 'item 1 uses 4-char right-aligned prefix in 10-item list' {
                 $frame = Build-AnsiFrame -Title 'Menu' -Items $script:items10 -SelectedIndex 0 `
                     -Breadcrumb @() -InnerWidth 60 -Chars $script:chars -FooterText 'footer' `
-                    -Theme $script:theme -IndexNavigation
+                    -IndexNavigation
 
                 $plain = script:Remove-AnsiEscapes $frame
                 # PadLeft(4): " 1. Item 1" -- note leading space
@@ -497,7 +510,7 @@ InModuleScope PSYamlTUI {
             It 'hotkey suffix is not present in frame output in index mode' {
                 $frame = Build-AnsiFrame -Title 'Menu' -Items $script:itemsWithHotkey -SelectedIndex 0 `
                     -Breadcrumb @() -InnerWidth 50 -Chars $script:chars -FooterText 'footer' `
-                    -Theme $script:theme -IndexNavigation
+                    -IndexNavigation
 
                 $plain = script:Remove-AnsiEscapes $frame
                 $plain | Should -Not -Match '\[R\]'
@@ -506,7 +519,7 @@ InModuleScope PSYamlTUI {
             It 'description is not rendered in frame output in index mode' {
                 $frame = Build-AnsiFrame -Title 'Menu' -Items $script:itemsWithDesc -SelectedIndex 0 `
                     -Breadcrumb @() -InnerWidth 60 -Chars $script:chars -FooterText 'footer' `
-                    -Theme $script:theme -IndexNavigation
+                    -IndexNavigation
 
                 $plain = script:Remove-AnsiEscapes $frame
                 $plain | Should -Not -Match 'Deploy the application'
@@ -517,8 +530,7 @@ InModuleScope PSYamlTUI {
 
             It 'frame output contains ESC[K sequences to prevent content bleed past right border' {
                 $frame = Build-AnsiFrame -Title 'Menu' -Items $script:items3 -SelectedIndex 0 `
-                    -Breadcrumb @() -InnerWidth 50 -Chars $script:chars -FooterText 'footer' `
-                    -Theme $script:theme
+                    -Breadcrumb @() -InnerWidth 50 -Chars $script:chars -FooterText 'footer'
                 $frame | Should -Match '\x1b\[K'
             }
         }
@@ -659,6 +671,68 @@ InModuleScope PSYamlTUI {
                 # Re-test signal flag via the keybinding path (already covered above).
                 $script:YamlTUI_Quit | Should -BeFalse  # baseline -- no crash
             }
+        }
+    }
+
+    # ===========================================================================
+    # Show-MenuFrame -- hotkey navigation
+    # Verifies that pressing a character matching an item hotkey updates the
+    # selected index, and that the match is case-insensitive.
+    # ===========================================================================
+
+    Describe 'Show-MenuFrame -- hotkey navigation' {
+
+        BeforeAll {
+            $script:hotkeyNavItems = @(
+                [PSCustomObject]@{ NodeType = 'FUNCTION'; Label = 'Alpha';  Hotkey = $null; Description = $null; Before = @(); Call = 'Invoke-Alpha'; Params = @{}; Confirm = $false }
+                [PSCustomObject]@{ NodeType = 'FUNCTION'; Label = 'Report'; Hotkey = 'R';   Description = $null; Before = @(); Call = 'Invoke-Report'; Params = @{}; Confirm = $false }
+                [PSCustomObject]@{ NodeType = 'EXIT';     Label = 'Exit';   Hotkey = $null; Description = $null; Before = @() }
+            )
+            $script:hotkeyNavTp = [PSCustomObject]@{
+                UseUnicode = $false; UseAnsi = $false; ColorMethod = 'WriteHost'; Width = 80
+            }
+        }
+
+        It 'pressing an item hotkey selects that item on the next render' {
+            $keyR = [System.ConsoleKeyInfo]::new([char]'R', [System.ConsoleKey]::R, $false, $false, $false)
+            $keyQ = [System.ConsoleKeyInfo]::new([char]'Q', [System.ConsoleKey]::Q, $false, $false, $false)
+            $script:_hkCallCount = 0
+            Mock -CommandName 'Read-ConsoleKey' -MockWith {
+                $script:_hkCallCount++
+                if ($script:_hkCallCount -eq 1) { return $keyR }
+                return $keyQ
+            }
+            $script:_hkLastIdx = -1
+            Mock -CommandName 'Write-MenuFrame'   -MockWith { $script:_hkLastIdx = $SelectedIndex }
+            Mock -CommandName 'Clear-ConsoleSafe' -MockWith {}
+            Mock -CommandName 'Write-Host'        -MockWith {}
+
+            Show-MenuFrame -MenuData ([PSCustomObject]@{ Title = 'T'; Items = $script:hotkeyNavItems }) `
+                -RootDir $TestDrive -TermProfile $script:hotkeyNavTp -Chars $script:chars `
+                -KeyBindings $script:bindings -Theme $script:theme -IsRoot
+
+            $script:_hkLastIdx | Should -Be 1
+        }
+
+        It 'hotkey match is case-insensitive' {
+            $keyR_lower = [System.ConsoleKeyInfo]::new([char]'r', [System.ConsoleKey]::R, $false, $false, $false)
+            $keyQ = [System.ConsoleKeyInfo]::new([char]'Q', [System.ConsoleKey]::Q, $false, $false, $false)
+            $script:_hkCiCallCount = 0
+            Mock -CommandName 'Read-ConsoleKey' -MockWith {
+                $script:_hkCiCallCount++
+                if ($script:_hkCiCallCount -eq 1) { return $keyR_lower }
+                return $keyQ
+            }
+            $script:_hkCiLastIdx = -1
+            Mock -CommandName 'Write-MenuFrame'   -MockWith { $script:_hkCiLastIdx = $SelectedIndex }
+            Mock -CommandName 'Clear-ConsoleSafe' -MockWith {}
+            Mock -CommandName 'Write-Host'        -MockWith {}
+
+            Show-MenuFrame -MenuData ([PSCustomObject]@{ Title = 'T'; Items = $script:hotkeyNavItems }) `
+                -RootDir $TestDrive -TermProfile $script:hotkeyNavTp -Chars $script:chars `
+                -KeyBindings $script:bindings -Theme $script:theme -IsRoot
+
+            $script:_hkCiLastIdx | Should -Be 1
         }
     }
 
@@ -846,7 +920,7 @@ InModuleScope PSYamlTUI {
         It 'writes cursor-position sequence for prev item row (no breadcrumb, item 0 -> row 5)' {
             $output = script:CaptureConsoleWrite {
                 Write-AnsiNavUpdate -Items $script:navItems -PrevIdx 0 -NewIdx 1 `
-                    -Breadcrumb @() -InnerWidth 50 -Chars $script:navChars -Theme $script:theme
+                    -Breadcrumb @() -InnerWidth 50 -Chars $script:navChars
             }
             $output | Should -Match '\x1b\[5;1H'
         }
@@ -854,7 +928,7 @@ InModuleScope PSYamlTUI {
         It 'writes cursor-position sequence for new item row (no breadcrumb, item 1 -> row 6)' {
             $output = script:CaptureConsoleWrite {
                 Write-AnsiNavUpdate -Items $script:navItems -PrevIdx 0 -NewIdx 1 `
-                    -Breadcrumb @() -InnerWidth 50 -Chars $script:navChars -Theme $script:theme
+                    -Breadcrumb @() -InnerWidth 50 -Chars $script:navChars
             }
             $output | Should -Match '\x1b\[6;1H'
         }
@@ -862,7 +936,7 @@ InModuleScope PSYamlTUI {
         It 'offsets item rows by 1 when breadcrumb is present (item 0 -> row 6, item 1 -> row 7)' {
             $output = script:CaptureConsoleWrite {
                 Write-AnsiNavUpdate -Items $script:navItems -PrevIdx 0 -NewIdx 1 `
-                    -Breadcrumb @('Root') -InnerWidth 50 -Chars $script:navChars -Theme $script:theme
+                    -Breadcrumb @('Root') -InnerWidth 50 -Chars $script:navChars
             }
             $output | Should -Match '\x1b\[6;1H'
             $output | Should -Match '\x1b\[7;1H'
@@ -871,7 +945,7 @@ InModuleScope PSYamlTUI {
         It 'prev item line is rendered without selector character adjacent to its label' {
             $output = script:CaptureConsoleWrite {
                 Write-AnsiNavUpdate -Items $script:navItems -PrevIdx 0 -NewIdx 1 `
-                    -Breadcrumb @() -InnerWidth 50 -Chars $script:navChars -Theme $script:theme
+                    -Breadcrumb @() -InnerWidth 50 -Chars $script:navChars
             }
             # Strip all ANSI codes; selector and label land in the same flat string
             $plain = $output -replace '\x1b\[[0-9;]*[a-zA-Z]', ''
@@ -882,7 +956,7 @@ InModuleScope PSYamlTUI {
         It 'new item line is rendered with selector character adjacent to its label' {
             $output = script:CaptureConsoleWrite {
                 Write-AnsiNavUpdate -Items $script:navItems -PrevIdx 0 -NewIdx 1 `
-                    -Breadcrumb @() -InnerWidth 50 -Chars $script:navChars -Theme $script:theme
+                    -Breadcrumb @() -InnerWidth 50 -Chars $script:navChars
             }
             $plain = $output -replace '\x1b\[[0-9;]*[a-zA-Z]', ''
             $sel = [regex]::Escape($script:navChars.Selected)

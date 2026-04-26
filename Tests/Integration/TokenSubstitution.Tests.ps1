@@ -144,6 +144,107 @@ InModuleScope PSYamlTUI {
             }
         }
 
+        Context 'token keys containing hyphens' {
+
+            It 'substitutes a token whose key contains a hyphen' {
+                $yaml = @'
+menu:
+  title: "{{db-host}}"
+  items:
+    - label: "Exit"
+      exit: true
+'@
+                $menuPath = Join-Path -Path $TestDrive -ChildPath 'hyphen-token.menu.yaml'
+                Set-Content -Path $menuPath -Value $yaml -Encoding UTF8
+                $result = Read-MenuFile -Path $menuPath -Context @{ 'db-host' = 'prod-db.internal' }
+                $result.Title | Should -Be 'prod-db.internal'
+            }
+        }
+
+        Context 'multiple tokens in the same string' {
+
+            It 'two tokens in the same title value are both substituted' {
+                $yaml = @'
+menu:
+  title: "{{appName}} v{{version}}"
+  items:
+    - label: "Exit"
+      exit: true
+'@
+                $menuPath = Join-Path -Path $TestDrive -ChildPath 'multi-token.menu.yaml'
+                Set-Content -Path $menuPath -Value $yaml -Encoding UTF8
+                $result = Read-MenuFile -Path $menuPath -Context @{ appName = 'MyApp'; version = '2.0' }
+                $result.Title | Should -Be 'MyApp v2.0'
+            }
+
+            It 'unknown token alongside a known token is left as-is' {
+                $yaml = @'
+menu:
+  title: "{{known}} and {{unknown}}"
+  items:
+    - label: "Exit"
+      exit: true
+'@
+                $menuPath = Join-Path -Path $TestDrive -ChildPath 'mixed-token.menu.yaml'
+                Set-Content -Path $menuPath -Value $yaml -Encoding UTF8
+                $result = Read-MenuFile -Path $menuPath -Context @{ known = 'Hello' }
+                $result.Title | Should -Be 'Hello and {{unknown}}'
+            }
+        }
+
+        Context 'token substitution inside imported file content' {
+
+            It 'substitutes tokens in an imported file item label' {
+                $subYaml = @'
+items:
+  - label: "Deploy to {{environment}}"
+    call: "Invoke-Deploy"
+  - label: "Exit"
+    exit: true
+'@
+                $subPath = Join-Path -Path $TestDrive -ChildPath 'tok-sub.yaml'
+                Set-Content -Path $subPath -Value $subYaml -Encoding UTF8
+                $rootYaml = @'
+menu:
+  title: "T"
+  items:
+    - label: "Section"
+      import: "./tok-sub.yaml"
+    - label: "Exit"
+      exit: true
+'@
+                $menuPath = Join-Path -Path $TestDrive -ChildPath 'tok-root.menu.yaml'
+                Set-Content -Path $menuPath -Value $rootYaml -Encoding UTF8
+                $result = Read-MenuFile -Path $menuPath -Context @{ environment = 'prod' }
+                $result.Items[0].Children[0].Label | Should -Be 'Deploy to prod'
+            }
+
+            It 'substitutes a hyphenated token key in an imported file item label' {
+                $subYaml = @'
+items:
+  - label: "{{db-host}}"
+    call: "Invoke-Connect"
+  - label: "Exit"
+    exit: true
+'@
+                $subPath = Join-Path -Path $TestDrive -ChildPath 'hyphensub.yaml'
+                Set-Content -Path $subPath -Value $subYaml -Encoding UTF8
+                $rootYaml = @'
+menu:
+  title: "T"
+  items:
+    - label: "DB"
+      import: "./hyphensub.yaml"
+    - label: "Exit"
+      exit: true
+'@
+                $menuPath = Join-Path -Path $TestDrive -ChildPath 'hyphenroot.menu.yaml'
+                Set-Content -Path $menuPath -Value $rootYaml -Encoding UTF8
+                $result = Read-MenuFile -Path $menuPath -Context @{ 'db-host' = 'prod-db.internal' }
+                $result.Items[0].Children[0].Label | Should -Be 'prod-db.internal'
+            }
+        }
+
         Context 'windows-paths.vars.yaml' {
 
             BeforeAll {
