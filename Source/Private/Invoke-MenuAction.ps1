@@ -44,8 +44,10 @@ function Invoke-MenuAction {
             [System.IO.Path]::Combine($RootDir, $Node.Call)
         )
 
-        # Reject any path that escapes the root directory
-        if (-not $scriptPath.StartsWith($RootDir, [System.StringComparison]::OrdinalIgnoreCase)) {
+        # Reject any path that escapes the root directory.
+        # Append separator before comparing so "C:\root" does not match "C:\root_other\evil.ps1".
+        $rootPrefix = if ($RootDir.EndsWith([System.IO.Path]::DirectorySeparatorChar)) { $RootDir } else { $RootDir + [System.IO.Path]::DirectorySeparatorChar }
+        if (-not $scriptPath.StartsWith($rootPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
             throw "Security: script path '$($Node.Call)' resolves outside the root directory."
         }
 
